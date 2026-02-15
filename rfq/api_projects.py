@@ -340,6 +340,7 @@ def projects_bulk(request):
     upserted = 0
     deleted = 0
     incoming_ids = set()
+    allow_delete = bool(isinstance(payload, dict) and payload.get('full_replace') is True)
 
     skipped = 0
     with transaction.atomic():
@@ -371,13 +372,15 @@ def projects_bulk(request):
             obj.save()
             upserted += 1
 
-        existing_ids = set(p.id for p in _projects_qs_for_actor(actor) if can_edit_project(actor, p))
-        ids_to_delete = existing_ids - incoming_ids
-        if ids_to_delete:
-            deleted = _projects_qs_for_actor(actor).filter(id__in=ids_to_delete).delete()[0]
+        # Safety: never prune server projects unless client explicitly requests full replacement.
+        if allow_delete:
+            existing_ids = set(p.id for p in _projects_qs_for_actor(actor) if can_edit_project(actor, p))
+            ids_to_delete = existing_ids - incoming_ids
+            if ids_to_delete:
+                deleted = _projects_qs_for_actor(actor).filter(id__in=ids_to_delete).delete()[0]
 
-    audit_log(request, actor, action='project.bulk_sync', entity_type='project', entity_id='bulk', metadata={'upserted': upserted, 'deleted': deleted, 'skipped': skipped})
-    return JsonResponse({'ok': True, 'upserted': upserted, 'deleted': deleted, 'skipped': skipped})
+    audit_log(request, actor, action='project.bulk_sync', entity_type='project', entity_id='bulk', metadata={'upserted': upserted, 'deleted': deleted, 'skipped': skipped, 'full_replace': allow_delete})
+    return JsonResponse({'ok': True, 'upserted': upserted, 'deleted': deleted, 'skipped': skipped, 'full_replace': allow_delete})
 
 
 @csrf_exempt
