@@ -16293,65 +16293,119 @@ Best regards`)}</textarea>
         <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     `;
 
-            setTimeout(() => _renderPriceFinderContent(container), 30);
+            setTimeout(async () => {
+                try {
+                    await _renderPriceFinderContent(container);
+                } catch (err) {
+                    console.error("Price Finder load failed:", err);
+                    container.innerHTML = `<div style="padding:24px; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; color:#991b1b;">Price Finder failed to load quotes data. Please try Refresh.</div>`;
+                }
+            }, 30);
         }
 
-        function _renderPriceFinderContent(container) {
+        async function _renderPriceFinderContent(container) {
             const items = currentProject.items || [];
-            const findDuplicates = window.RFQData?.findDuplicateParts || (() => []);
             const rates = window.RFQData?.getExchangeRates?.() || { EUR: 1, USD: 0.92, CZK: 0.04 };
 
-            // Collect all matches with pricing data
+            const _n = (v) => String(v || '').trim().toLowerCase();
+            const _num = (v) => {
+                const n = parseFloat(v);
+                return Number.isFinite(n) ? n : 0;
+            };
+
+            // Collect all matches with pricing data FROM QUOTES DB
             const results = [];
 
+            // 1) Load quotes index
+            const idxRes = await _qFetchJson('/api/quotes/?limit=500&offset=0', { method: 'GET' });
+            const quoteIndex = (idxRes && idxRes.quotes) ? idxRes.quotes : [];
+
+            // 2) Load quote details (with lines) for all quotes outside current project
+            const quoteDetails = [];
+            for (const q of quoteIndex) {
+                if (!q || !q.id) continue;
+                if (String(q.project_id || '') === String(currentProject.id || '')) continue;
+                try {
+                    const det = await _qFetchJson(`/api/quotes/${q.id}/`, { method: 'GET' });
+                    if (det && det.quote) quoteDetails.push(det.quote);
+                } catch (e) {
+                    console.warn('PriceFinder: failed to load quote detail', q.id, e);
+                }
+            }
+
+            // 3) Match current project items to quote lines by drawing_no / mpn
             items.forEach((item, itemIdx) => {
                 const dn = item.item_drawing_no || item.drawing_no || '';
                 const mpn = item.mpn || '';
                 if (!dn && !mpn) return;
 
-                const matches = findDuplicates(dn, mpn, currentProject.id);
-                if (!matches.length) return;
-
+                const dnKey = _n(dn);
+                const mpnKey = _n(mpn);
                 const ourQty = parseFloat(item.qty_1) || 1;
                 const hasCurrentQuote = (item.suppliers || []).some(s => parseFloat(s.price_1 || s.price) > 0);
 
-                // Collect quotes from matched projects
                 const quotes = [];
-                matches.forEach(m => {
-                    const mi = m.item;
-                    const sourceQty = parseFloat(mi.qty_1) || 1; // QTY from source project
-                    (mi.suppliers || []).forEach(sup => {
-                        const p = parseFloat(sup.price_1 || sup.price) || 0;
-                        if (p <= 0) return;
+                const seen = new Set();
 
-                        const cur = (sup.currency || 'EUR').toUpperCase();
-                        const eur = p * (rates[cur] || 1);
+                quoteDetails.forEach(qd => {
+                    const lines = Array.isArray(qd.lines) ? qd.lines : [];
+                    lines.forEach(ln => {
+                        const ldn = _n(ln.drawing_number || ln.item_drawing_no || ln.drawing_no);
+                        const lmpn = _n(ln.mpn);
+                        if (!(dnKey && ldn && dnKey === ldn) && !(mpnKey && lmpn && mpnKey === lmpn)) return;
+
+                        // base price: prefer price_1, fallback first available tier
+                        let basePrice = _num(ln.price_1);
+                        if (!basePrice) {
+                            for (let i = 2; i <= 10; i++) {
+                                const p = _num(ln[`price_${i}`]);
+                                if (p > 0) { basePrice = p; break; }
+                            }
+                        }
+                        if (basePrice <= 0) return;
+
+                        const cur = String(qd.currency || 'EUR').toUpperCase();
+                        const eur = basePrice * (rates[cur] || 1);
+
+                        const allPrices = [];
+                        for (let i = 1; i <= 10; i++) {
+                            const qv = ln[`qty_${i}`];
+                            const pv = ln[`price_${i}`];
+                            if (qv && pv !== null && pv !== undefined && String(pv).trim() !== '') {
+                                allPrices.push({ qty: qv, price: pv, index: i });
+                            }
+                        }
+
+                        const sourceQty = _num(ln.qty_1) || 1;
+                        const supplier = qd.supplier_name || 'Unknown';
+                        const dedupKey = `${qd.id}|${supplier}|${ln.line_number || ln.id || ldn || lmpn}`;
+                        if (seen.has(dedupKey)) return;
+                        seen.add(dedupKey);
 
                         quotes.push({
-                            projectId: m.projectId,
-                            projectName: m.projectName,
-                            matchType: m.matchType,
-                            matchedDn: mi.item_drawing_no || mi.drawing_no || '',
-                            matchedMpn: mi.mpn || '',
-                            sourceQty: sourceQty, // QTY in the source project
-                            supplier: sup.name || '?',
-                            email: sup.email || '',
-                            quoteNo: sup.quote_no || sup.quoteNo || '',
-                            quoteDate: sup.quoted_date || sup.quote_date || '',
-                            validUntil: sup.valid_until || sup.validity || '',
-                            price: p,
+                            projectId: qd.project_id,
+                            projectName: qd.project_name || '',
+                            matchType: (dnKey && ldn && dnKey === ldn) ? 'drawing_no' : 'mpn',
+                            matchedDn: ln.drawing_number || '',
+                            matchedMpn: ln.mpn || '',
+                            sourceQty: sourceQty,
+                            supplier: supplier,
+                            email: '',
+                            quoteNo: qd.quote_number || '',
+                            quoteDate: qd.create_date || '',
+                            validUntil: qd.expire_date || '',
+                            price: basePrice,
                             currency: cur,
                             priceEur: eur,
-                            leadTime: sup.lead_time || '',
-                            moq: sup.moq || '',
-                            incoterms: sup.incoterms || '',
-                            allPrices: sup.prices || []
+                            leadTime: ln.supplier_lead_time || ln.manufacturing_lead_time || '',
+                            moq: ln.moq || '',
+                            incoterms: qd.incoterm || qd.incoterms || '',
+                            allPrices: allPrices
                         });
                     });
                 });
 
                 if (quotes.length === 0) return;
-
                 quotes.sort((a, b) => a.priceEur - b.priceEur);
 
                 results.push({
@@ -16365,7 +16419,6 @@ Best regards`)}</textarea>
                     bestEur: quotes[0].priceEur
                 });
             });
-
             // Statistics
             const needQuote = results.filter(r => !r.hasCurrentQuote);
             const suppliers = [...new Set(results.flatMap(r => r.quotes.map(q => q.supplier)))];
