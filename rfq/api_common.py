@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from django.conf import settings as django_settings
 from django.http import JsonResponse
 
-from .models import UserCompanyProfile
+from .models import ProjectAccess, UserCompanyProfile
 
 logger = logging.getLogger(__name__)
 
@@ -151,3 +151,52 @@ def require_auth_and_profile(request):
 def require_role(actor, min_role='viewer'):
     role = (actor or {}).get('role') or 'viewer'
     return ROLE_ORDER.get(role, 0) >= ROLE_ORDER.get(min_role, 0)
+
+
+def can_view_project(actor, project):
+    if actor is None or project is None:
+        return False
+    if actor.get('is_superadmin'):
+        return True
+
+    company = actor.get('company')
+    if company is None or getattr(project, 'company_id', None) != getattr(company, 'id', None):
+        return False
+
+    role = (actor.get('role') or 'viewer').lower()
+    if role in ('admin',):
+        return True
+
+    # Restricted only when explicit ACL rows exist for the project.
+    qs = ProjectAccess.objects.filter(project_id=project.id)
+    if not qs.exists():
+        return True
+
+    if actor.get('is_management'):
+        return True
+
+    user = actor.get('user')
+    if not user or not getattr(user, 'id', None):
+        return False
+
+    return qs.filter(user_id=user.id, can_view=True).exists()
+
+
+def can_edit_project(actor, project):
+    if not can_view_project(actor, project):
+        return False
+
+    role = (actor.get('role') or 'viewer').lower()
+    if role in ('superadmin', 'admin', 'editor'):
+        # still respect explicit ACL if present for non-admin roles
+        if role in ('superadmin', 'admin'):
+            return True
+        qs = ProjectAccess.objects.filter(project_id=project.id)
+        if not qs.exists():
+            return True
+        user = actor.get('user')
+        if not user or not getattr(user, 'id', None):
+            return False
+        return qs.filter(user_id=user.id, can_edit=True).exists()
+
+    return False

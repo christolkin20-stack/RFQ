@@ -1,14 +1,18 @@
 import uuid
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.http import JsonResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 
 from .api_common import (
+    can_edit_project,
+    can_view_project,
     require_auth_and_profile,
+    require_role,
     require_same_origin_for_unsafe,
     json_body,
 )
-from .models import Project, Attachment
+from .models import Project, Attachment, ProjectAccess
 from . import views_api as _v
 
 
@@ -151,10 +155,13 @@ def projects_collection(request):
         return csrf_err
 
     if request.method == 'GET':
-        projects = [p.as_dict() for p in _projects_qs_for_actor(actor)]
+        projects = [p.as_dict() for p in _projects_qs_for_actor(actor) if can_view_project(actor, p)]
         return JsonResponse({'projects': projects})
 
     if request.method == 'POST':
+        if not require_role(actor, 'editor'):
+            return JsonResponse({'error': 'Edit permission required'}, status=403)
+
         payload = json_body(request)
         if not isinstance(payload, dict):
             return JsonResponse({'error': 'Invalid JSON body'}, status=400)
@@ -166,6 +173,8 @@ def projects_collection(request):
             obj, _created = _projects_qs_for_actor(actor).select_for_update().get_or_create(id=pid, defaults={'name': name, 'data': proj, 'company': actor.get('company')})
             if not obj.company_id and actor and actor.get('company'):
                 obj.company = actor.get('company')
+            elif obj.company_id and not can_edit_project(actor, obj):
+                return JsonResponse({'error': 'Access denied'}, status=403)
             obj.name = name
             obj.data = proj
             obj.save()
@@ -191,9 +200,14 @@ def project_detail(request, project_id: str):
             obj = _projects_qs_for_actor(actor).get(id=pid)
         except Project.DoesNotExist:
             return JsonResponse({'error': 'Not found'}, status=404)
+        if not can_view_project(actor, obj):
+            return JsonResponse({'error': 'Not found'}, status=404)
         return JsonResponse({'project': obj.as_dict()})
 
     if request.method in ('PUT', 'PATCH'):
+        if not require_role(actor, 'editor'):
+            return JsonResponse({'error': 'Edit permission required'}, status=403)
+
         payload = json_body(request)
         if not isinstance(payload, dict):
             return JsonResponse({'error': 'Invalid JSON body'}, status=400)
@@ -203,13 +217,20 @@ def project_detail(request, project_id: str):
             obj, _created = _projects_qs_for_actor(actor).select_for_update().get_or_create(id=pid, defaults={'name': name, 'data': proj, 'company': actor.get('company')})
             if not obj.company_id and actor and actor.get('company'):
                 obj.company = actor.get('company')
+            elif obj.company_id and not can_edit_project(actor, obj):
+                return JsonResponse({'error': 'Access denied'}, status=403)
             obj.name = name
             obj.data = proj
             obj.save()
         return JsonResponse({'project': obj.as_dict()})
 
     if request.method == 'DELETE':
-        _projects_qs_for_actor(actor).filter(id=pid).delete()
+        if not require_role(actor, 'editor'):
+            return JsonResponse({'error': 'Edit permission required'}, status=403)
+        obj = _projects_qs_for_actor(actor).filter(id=pid).first()
+        if not obj or not can_edit_project(actor, obj):
+            return JsonResponse({'error': 'Not found'}, status=404)
+        obj.delete()
         return JsonResponse({'ok': True})
 
     return HttpResponseNotAllowed(['GET', 'PUT', 'PATCH', 'DELETE'])
@@ -227,6 +248,9 @@ def projects_bulk(request):
 
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
+
+    if not require_role(actor, 'editor'):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     payload = json_body(request)
     projects = None
@@ -253,12 +277,14 @@ def projects_bulk(request):
             obj, _created = _projects_qs_for_actor(actor).select_for_update().get_or_create(id=pid, defaults={'name': name, 'data': proj, 'company': actor.get('company')})
             if not obj.company_id and actor and actor.get('company'):
                 obj.company = actor.get('company')
+            elif obj.company_id and not can_edit_project(actor, obj):
+                return JsonResponse({'error': 'Access denied'}, status=403)
             obj.name = name
             obj.data = _merge_preserve_supplier_quotes(obj.data or {}, proj)
             obj.save()
             upserted += 1
 
-        existing_ids = set(_projects_qs_for_actor(actor).values_list('id', flat=True))
+        existing_ids = set(p.id for p in _projects_qs_for_actor(actor) if can_edit_project(actor, p))
         ids_to_delete = existing_ids - incoming_ids
         if ids_to_delete:
             deleted = _projects_qs_for_actor(actor).filter(id__in=ids_to_delete).delete()[0]
@@ -278,6 +304,8 @@ def projects_reset(request):
 
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
+    if not require_role(actor, 'admin'):
+        return JsonResponse({'error': 'Admin permission required'}, status=403)
     _projects_qs_for_actor(actor).delete()
     return JsonResponse({'ok': True})
 
@@ -298,10 +326,14 @@ def project_attachments(request, project_id: str):
         return JsonResponse({'error': 'Project not found'}, status=404)
 
     if request.method == 'GET':
+        if not can_view_project(actor, proj):
+            return JsonResponse({'error': 'Not found'}, status=404)
         atts = [a.as_dict() for a in Attachment.objects.filter(project=proj).order_by('-uploaded_at')]
         return JsonResponse({'attachments': atts})
 
     if request.method == 'POST':
+        if not can_edit_project(actor, proj):
+            return JsonResponse({'error': 'Access denied'}, status=403)
         f = request.FILES.get('file')
         if not f:
             return JsonResponse({'error': 'Missing file'}, status=400)
@@ -329,6 +361,8 @@ def project_attachment_detail(request, project_id: str, attachment_id: str):
         return JsonResponse({'error': 'Not found'}, status=404)
 
     if request.method == 'DELETE':
+        if not can_edit_project(actor, att.project):
+            return JsonResponse({'error': 'Access denied'}, status=403)
         try:
             if att.file:
                 att.file.delete(save=False)
@@ -338,6 +372,86 @@ def project_attachment_detail(request, project_id: str, attachment_id: str):
         return JsonResponse({'ok': True})
 
     return HttpResponseNotAllowed(['DELETE'])
+
+
+@csrf_exempt
+def project_access(request, project_id: str):
+    actor, auth_err = require_auth_and_profile(request)
+    if auth_err:
+        return auth_err
+
+    csrf_err = require_same_origin_for_unsafe(request)
+    if csrf_err:
+        return csrf_err
+
+    proj = _projects_qs_for_actor(actor).filter(id=str(project_id)).first()
+    if not proj:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+    if request.method == 'GET':
+        if not can_view_project(actor, proj):
+            return JsonResponse({'error': 'Not found'}, status=404)
+        entries = ProjectAccess.objects.filter(project=proj).select_related('user').order_by('user_id')
+        data = [
+            {
+                'user_id': e.user_id,
+                'username': getattr(e.user, 'username', ''),
+                'can_view': bool(e.can_view),
+                'can_edit': bool(e.can_edit),
+            }
+            for e in entries
+        ]
+        return JsonResponse({'project_id': proj.id, 'access': data})
+
+    if request.method == 'POST':
+        if not require_role(actor, 'admin'):
+            return JsonResponse({'error': 'Admin permission required'}, status=403)
+        if not can_edit_project(actor, proj):
+            return JsonResponse({'error': 'Access denied'}, status=403)
+
+        payload = json_body(request)
+        if not isinstance(payload, dict):
+            return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+
+        rows = payload.get('access')
+        if not isinstance(rows, list):
+            return JsonResponse({'error': 'access[] required'}, status=400)
+
+        User = get_user_model()
+        # restrict to same company unless superadmin
+        allowed_users = User.objects.all()
+        if not actor.get('is_superadmin'):
+            company = actor.get('company')
+            allowed_users = allowed_users.filter(rfq_profile__company=company, rfq_profile__is_active=True)
+        allowed_ids = set(allowed_users.values_list('id', flat=True))
+
+        with transaction.atomic():
+            ProjectAccess.objects.filter(project=proj).delete()
+            created = 0
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                uid = row.get('user_id')
+                try:
+                    uid = int(uid)
+                except Exception:
+                    continue
+                if uid not in allowed_ids:
+                    continue
+                can_view = bool(row.get('can_view', True))
+                can_edit = bool(row.get('can_edit', False)) and can_view
+                ProjectAccess.objects.create(
+                    project=proj,
+                    user_id=uid,
+                    can_view=can_view,
+                    can_edit=can_edit,
+                    granted_by=actor.get('user') if actor and actor.get('user') and getattr(actor.get('user'), 'is_authenticated', False) else None,
+                )
+                created += 1
+
+        return JsonResponse({'ok': True, 'created': created})
+
+    return HttpResponseNotAllowed(['GET', 'POST'])
 
 
 # bridge until export module extraction

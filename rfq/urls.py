@@ -15,6 +15,7 @@ urlpatterns = [
     path('api/projects/reset', api_projects.projects_reset, name='api_projects_reset'),
     path('api/projects/<str:project_id>', api_projects.project_detail, name='api_project_detail'),
     path('api/projects/<str:project_id>/attachments', api_projects.project_attachments, name='api_project_attachments'),
+    path('api/projects/<str:project_id>/access', api_projects.project_access, name='api_project_access'),
     path('api/projects/<str:project_id>/attachments/<str:attachment_id>', api_projects.project_attachment_detail, name='api_project_attachment_detail'),
     path('api/export', api_projects.export_data, name='api_export'),
 
