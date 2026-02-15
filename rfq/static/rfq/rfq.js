@@ -20086,14 +20086,19 @@ Best regards`)}</textarea>
 
             usersEl.innerHTML = users.length ? users.map(u => {
                 const roleColor = u.role === 'superadmin' ? '#7c3aed' : (u.role === 'admin' ? '#0f766e' : (u.role === 'editor' ? '#1d4ed8' : '#475569'));
-                return `<div style="padding:8px 10px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; gap:8px; align-items:center;">
-                    <div style="min-width:0;">
+                const companyOptions = companies.map(c => `<option value="${c.id}" ${String(u.company_id||'')===String(c.id)?'selected':''}>${escapeHtml(c.name||'')}</option>`).join('');
+                return `<div style="padding:8px 10px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+                    <div style="min-width:0; flex:1;">
                         <div style="font-size:12px; font-weight:600; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(u.username || ('#'+u.user_id))}</div>
                         <div style="font-size:10px; color:#64748b;">${escapeHtml(u.email || '')} ${u.company_name ? '• '+escapeHtml(u.company_name) : ''}</div>
                     </div>
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <select data-admin-user-role="${u.user_id}" class="rfq-input" style="font-size:11px; padding:2px 6px; color:${roleColor};">
+                    <div style="display:grid; grid-template-columns:auto auto auto auto; gap:6px; align-items:center;">
+                        <select data-admin-user-role="${u.user_id}" class="rfq-input" style="font-size:11px; padding:2px 6px; color:${roleColor}; min-width:90px;">
                             ${['viewer','editor','admin','superadmin'].map(r => `<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('')}
+                        </select>
+                        <label style="font-size:10px; color:#475569; display:flex; align-items:center; gap:4px;"><input type="checkbox" data-admin-user-mgmt="${u.user_id}" ${u.is_management?'checked':''}/> mgmt</label>
+                        <select data-admin-user-company="${u.user_id}" class="rfq-input" style="font-size:11px; padding:2px 6px; min-width:120px;">
+                            <option value="">(none)</option>${companyOptions}
                         </select>
                         <button class="btn-secondary" data-admin-user-save="${u.user_id}" style="font-size:10px; padding:3px 8px;">Save</button>
                     </div>
@@ -20110,8 +20115,18 @@ Best regards`)}</textarea>
                     const uid = btn.getAttribute('data-admin-user-save');
                     const sel = usersEl.querySelector(`[data-admin-user-role="${uid}"]`);
                     const role = sel ? sel.value : 'viewer';
+                    const mg = usersEl.querySelector(`[data-admin-user-mgmt="${uid}"]`);
+                    const co = usersEl.querySelector(`[data-admin-user-company="${uid}"]`);
                     try {
-                        await _settingsFetchJson('/api/admin/users', { method: 'POST', body: { user_id: Number(uid), role } });
+                        await _settingsFetchJson('/api/admin/users', {
+                            method: 'POST',
+                            body: {
+                                user_id: Number(uid),
+                                role,
+                                is_management: !!(mg && mg.checked),
+                                company_id: co ? co.value : null,
+                            }
+                        });
                         showToast('User updated', 'success');
                         renderAdminManagement();
                     } catch (e) {

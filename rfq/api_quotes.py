@@ -332,11 +332,18 @@ def quotes_create(request):
     quote_id = data.get('id') or str(uuid.uuid4())
     project_id = data.get('project_id')
 
+    project_obj = None
+    if project_id:
+        project_obj = _projects_qs_for_actor(actor).filter(id=str(project_id)).first()
+        if not project_obj:
+            return JsonResponse({'error': 'Project not found or access denied'}, status=404)
+
     with transaction.atomic():
         quote = Quote(
             id=quote_id,
-            project_id=project_id if project_id else None,
-            project_name=data.get('project_name', ''),
+            company=project_obj.company if project_obj else actor.get('company'),
+            project=project_obj,
+            project_name=(project_obj.name if project_obj else data.get('project_name', '')),
             supplier_name=supplier_name,
             received_from=data.get('received_from', ''),
             quote_number=data.get('quote_number', ''),
@@ -438,7 +445,15 @@ def quotes_update(request, quote_id):
         if 'notes' in data:
             quote.notes = data['notes']
         if 'project_id' in data:
-            quote.project_id = data['project_id']
+            npid = data['project_id']
+            if npid:
+                nproj = _projects_qs_for_actor(actor).filter(id=str(npid)).first()
+                if not nproj:
+                    return JsonResponse({'error': 'Project not found or access denied'}, status=404)
+                quote.project = nproj
+                quote.company = nproj.company
+            else:
+                quote.project = None
         if 'project_name' in data:
             quote.project_name = data['project_name']
 
@@ -710,6 +725,14 @@ def quotes_bulk_import(request):
                 now_str = timezone.now().strftime('%Y%m%d_%H%M')
                 q_num = f"{sname.replace(' ', '_').upper()}_{now_str}_{random.randint(1000, 9999)}"
 
+            proj = None
+            q_pid = q_data.get('project_id')
+            if q_pid:
+                proj = _projects_qs_for_actor(actor).filter(id=str(q_pid)).first()
+                if not proj:
+                    errors.append(f'Row {idx+1}: invalid project_id or access denied')
+                    continue
+
             quote, _created = _quotes_qs_for_actor(actor).update_or_create(
                 quote_number=q_num,
                 defaults={
@@ -717,6 +740,9 @@ def quotes_bulk_import(request):
                     'source': 'import',
                     'currency': q_data.get('currency') or 'EUR',
                     'created_by': _get_buyer_username(request),
+                    'project': proj,
+                    'project_name': (proj.name if proj else str(q_data.get('project_name') or '')),
+                    'company': (proj.company if proj else actor.get('company')),
                 },
             )
 
