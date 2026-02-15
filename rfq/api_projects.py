@@ -813,5 +813,54 @@ def admin_companies(request):
 
 
 
+@csrf_exempt
+def admin_audit_logs(request):
+    actor, auth_err = require_auth_and_profile(request)
+    if auth_err:
+        return auth_err
+
+    if request.method != 'GET':
+        return HttpResponseNotAllowed(['GET'])
+
+    if not require_role(actor, 'admin'):
+        return JsonResponse({'error': 'Admin permission required'}, status=403)
+
+    from .models import AuditLog
+
+    q = AuditLog.objects.select_related('actor', 'company', 'project').all()
+    if not actor.get('is_superadmin'):
+        q = q.filter(company=actor.get('company'))
+
+    action = str(request.GET.get('action') or '').strip()
+    if action:
+        q = q.filter(action__icontains=action)
+
+    entity = str(request.GET.get('entity_type') or '').strip()
+    if entity:
+        q = q.filter(entity_type__icontains=entity)
+
+    try:
+        limit = min(int(request.GET.get('limit', 100)), 500)
+    except Exception:
+        limit = 100
+
+    rows = []
+    for a in q.order_by('-created_at')[:limit]:
+        rows.append({
+            'id': a.id,
+            'time': a.created_at.isoformat() if a.created_at else '',
+            'action': a.action,
+            'entity_type': a.entity_type,
+            'entity_id': a.entity_id,
+            'actor': getattr(a.actor, 'username', '') if a.actor_id else '',
+            'actor_role': a.actor_role,
+            'company_id': a.company_id,
+            'project_id': a.project_id,
+            'metadata': a.metadata_json or {},
+        })
+
+    return JsonResponse({'logs': rows})
+
+
 # bridge until export module extraction
 export_data = _v.export_data

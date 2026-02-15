@@ -29,6 +29,7 @@ urlpatterns = [
     # Admin management API (in-app admin page backend)
     path('api/admin/users', api_projects.admin_users, name='api_admin_users'),
     path('api/admin/companies', api_projects.admin_companies, name='api_admin_companies'),
+    path('api/admin/audit_logs', api_projects.admin_audit_logs, name='api_admin_audit_logs'),
 
     # Supplier Interaction API
     path('api/supplier_access/generate', api_supplier.supplier_access_generate, name='api_supplier_access_generate'),

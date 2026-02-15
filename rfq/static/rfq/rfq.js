@@ -1181,6 +1181,29 @@ window.SystemApps.rfq = {
                                     </div>
                                 </div>
 
+
+                                <!-- Admin Management Section -->
+                                <div style="padding: 0 20px 20px 20px;">
+                                    <div class="sd-card" style="width: 100%;">
+                                        <div class="sd-card-title">Admin Management (Multi-tenant)</div>
+                                        <div style="font-size: 11px; color: #666; margin-bottom: 12px;">Manage users/roles and companies (superadmin).</div>
+                                        <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: 12px;">
+                                            <div>
+                                                <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Users</div>
+                                                <div id="settings-admin-users" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Companies</div>
+                                                <div id="settings-admin-companies" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></div>
+                                                <div style="display:flex; gap:8px; margin-top:8px;">
+                                                    <input id="settings-admin-company-name" class="rfq-input" placeholder="New company name" style="flex:1;" />
+                                                    <button id="btn-settings-admin-add-company" class="btn-secondary" type="button">Add</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div id="settings-admin-note" style="margin-top:8px; font-size:11px; color:#64748b;"></div>
+                                    </div>
+                                </div>
                                 <!-- Status Management Section (half width) -->
                                 <div style="padding: 0 20px 20px 20px;">
                                     <div class="sd-card" style="width: 50%; min-width: 400px;">
@@ -19985,6 +20008,104 @@ Best regards`)}</textarea>
         // =========================================================
         // Settings - Currency Rates and Display Settings
         // =========================================================
+        async function _settingsFetchJson(url, options = {}) {
+            const opts = {
+                method: options.method || 'GET',
+                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                credentials: 'same-origin'
+            };
+            if (options.body !== undefined) opts.body = JSON.stringify(options.body);
+            const r = await fetch(url, opts);
+            let data = {};
+            try { data = await r.json(); } catch (_) { }
+            if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+            return data;
+        }
+
+        async function renderAdminManagement() {
+            const usersEl = getEl('settings-admin-users');
+            const compEl = getEl('settings-admin-companies');
+            const noteEl = getEl('settings-admin-note');
+            const addBtn = getEl('btn-settings-admin-add-company');
+            const addInput = getEl('settings-admin-company-name');
+            if (!usersEl || !compEl) return;
+
+            usersEl.innerHTML = '<div style="padding:10px; font-size:11px; color:#64748b;">Loading...</div>';
+            compEl.innerHTML = '<div style="padding:10px; font-size:11px; color:#64748b;">Loading...</div>';
+            if (noteEl) noteEl.textContent = '';
+
+            let users = [];
+            let companies = [];
+
+            try {
+                const ur = await _settingsFetchJson('/api/admin/users');
+                users = Array.isArray(ur?.users) ? ur.users : [];
+            } catch (e) {
+                usersEl.innerHTML = '<div style="padding:10px; font-size:11px; color:#b91c1c;">Admin users unavailable.</div>';
+                if (noteEl) noteEl.textContent = `Admin API: ${e.message}`;
+                return;
+            }
+
+            try {
+                const cr = await _settingsFetchJson('/api/admin/companies');
+                companies = Array.isArray(cr?.companies) ? cr.companies : [];
+            } catch (_) {
+                companies = [];
+            }
+
+            usersEl.innerHTML = users.length ? users.map(u => {
+                const roleColor = u.role === 'superadmin' ? '#7c3aed' : (u.role === 'admin' ? '#0f766e' : (u.role === 'editor' ? '#1d4ed8' : '#475569'));
+                return `<div style="padding:8px 10px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; gap:8px; align-items:center;">
+                    <div style="min-width:0;">
+                        <div style="font-size:12px; font-weight:600; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(u.username || ('#'+u.user_id))}</div>
+                        <div style="font-size:10px; color:#64748b;">${escapeHtml(u.email || '')} ${u.company_name ? '• '+escapeHtml(u.company_name) : ''}</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <select data-admin-user-role="${u.user_id}" class="rfq-input" style="font-size:11px; padding:2px 6px; color:${roleColor};">
+                            ${['viewer','editor','admin','superadmin'].map(r => `<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('')}
+                        </select>
+                        <button class="btn-secondary" data-admin-user-save="${u.user_id}" style="font-size:10px; padding:3px 8px;">Save</button>
+                    </div>
+                </div>`;
+            }).join('') : '<div style="padding:10px; font-size:11px; color:#64748b;">No users.</div>';
+
+            compEl.innerHTML = companies.length ? companies.map(c => `<div style="padding:8px 10px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:12px; font-weight:600; color:#0f172a;">${escapeHtml(c.name || '')}</div>
+                <div style="font-size:10px; color:${c.is_active ? '#16a34a' : '#dc2626'};">${c.is_active ? 'active' : 'inactive'}</div>
+            </div>`).join('') : '<div style="padding:10px; font-size:11px; color:#64748b;">Companies visible only for superadmin.</div>';
+
+            usersEl.querySelectorAll('[data-admin-user-save]').forEach(btn => {
+                btn.onclick = async () => {
+                    const uid = btn.getAttribute('data-admin-user-save');
+                    const sel = usersEl.querySelector(`[data-admin-user-role="${uid}"]`);
+                    const role = sel ? sel.value : 'viewer';
+                    try {
+                        await _settingsFetchJson('/api/admin/users', { method: 'POST', body: { user_id: Number(uid), role } });
+                        showToast('User updated', 'success');
+                        renderAdminManagement();
+                    } catch (e) {
+                        showToast(`Update failed: ${e.message}`, 'error');
+                    }
+                };
+            });
+
+            if (addBtn && !addBtn.dataset.bound) {
+                addBtn.dataset.bound = '1';
+                addBtn.onclick = async () => {
+                    const name = String(addInput?.value || '').trim();
+                    if (!name) { showToast('Enter company name', 'warning'); return; }
+                    try {
+                        await _settingsFetchJson('/api/admin/companies', { method: 'POST', body: { name } });
+                        if (addInput) addInput.value = '';
+                        showToast('Company created', 'success');
+                        renderAdminManagement();
+                    } catch (e) {
+                        showToast(`Create failed: ${e.message}`, 'error');
+                    }
+                };
+            }
+        }
+
         function renderSettings() {
             const ratesContainer = getEl('settings-currency-rates');
             const decimalsSelect = getEl('settings-currency-decimals');
@@ -20229,6 +20350,7 @@ Best regards`)}</textarea>
             // Status Management UI
             // =========================================================
             initStatusManagementUI();
+            try { renderAdminManagement(); } catch (e) { console.warn('Admin settings render failed', e); }
         }
 
         // Current status type being edited
