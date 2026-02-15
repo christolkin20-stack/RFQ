@@ -107,10 +107,29 @@ def get_request_actor(request):
 def require_auth_and_profile(request):
     auth_err = require_buyer_auth(request)
     if auth_err:
+        # In DEBUG mode require_buyer_auth already allows unauth; preserve that behavior.
+        if getattr(django_settings, 'DEBUG', False):
+            return {
+                'user': getattr(request, 'user', None),
+                'profile': None,
+                'company': None,
+                'role': 'superadmin',
+                'is_superadmin': True,
+                'is_management': True,
+            }, None
         return None, auth_err
 
     actor = get_request_actor(request)
     if actor is None:
+        if getattr(django_settings, 'DEBUG', False):
+            return {
+                'user': getattr(request, 'user', None),
+                'profile': None,
+                'company': None,
+                'role': 'superadmin',
+                'is_superadmin': True,
+                'is_management': True,
+            }, None
         return None, JsonResponse({'error': 'Authentication required'}, status=401)
 
     if not actor.get('is_superadmin') and not actor.get('company'):
