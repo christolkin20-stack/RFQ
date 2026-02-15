@@ -1,10 +1,47 @@
+from django.conf import settings
 from django.db import models
+
+
+class Company(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+
+
+class UserCompanyProfile(models.Model):
+    ROLE_SUPERADMIN = 'superadmin'
+    ROLE_ADMIN = 'admin'
+    ROLE_EDITOR = 'editor'
+    ROLE_VIEWER = 'viewer'
+
+    ROLE_CHOICES = [
+        (ROLE_SUPERADMIN, 'SuperAdmin'),
+        (ROLE_ADMIN, 'Admin'),
+        (ROLE_EDITOR, 'Editor'),
+        (ROLE_VIEWER, 'Viewer'),
+    ]
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='rfq_profile')
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='users', null=True, blank=True)
+    role = models.CharField(max_length=32, choices=ROLE_CHOICES, default=ROLE_VIEWER)
+    is_management = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user_id}:{self.role}"
 
 
 class Project(models.Model):
     """Stores a single RFQ project as a JSON blob (compatible with the existing JS app shape)."""
 
     id = models.CharField(primary_key=True, max_length=64)
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='projects', null=True, blank=True)
     name = models.CharField(max_length=255, blank=True, default='Untitled')
     data = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -40,6 +77,7 @@ class Attachment(models.Model):
     """File attachment linked to a project (project detail page)."""
 
     id = models.CharField(primary_key=True, max_length=64)
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='attachments', null=True, blank=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='attachments')
     file = models.FileField(upload_to='attachments/')
     kind = models.CharField(max_length=32, blank=True, default='')  # e.g. 'cover' or 'file'
@@ -63,6 +101,7 @@ class Attachment(models.Model):
 class SupplierAccess(models.Model):
     """Manages token-based access for suppliers."""
     id = models.CharField(primary_key=True, max_length=64)
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='supplier_accesses', null=True, blank=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='supplier_accesses')
     supplier_name = models.CharField(max_length=255)
     requested_items = models.JSONField(default=list)
@@ -148,6 +187,7 @@ class SupplierAccessRound(models.Model):
     Append-only history of negotiation rounds. 
     Created when a supplier submits (snapshot) OR when a buyer makes a decision.
     """
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='supplier_access_rounds', null=True, blank=True)
     supplier_access = models.ForeignKey(SupplierAccess, on_delete=models.CASCADE, related_name='rounds')
     round = models.IntegerField()
     requested_items = models.JSONField(default=list) # Snapshot of what was asked
@@ -166,6 +206,7 @@ class SupplierAccessRound(models.Model):
 
 class SupplierInteractionFile(models.Model):
     """Secure file uploads linked to a specific round."""
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='supplier_interaction_files', null=True, blank=True)
     supplier_access = models.ForeignKey(SupplierAccess, on_delete=models.CASCADE, related_name='files')
     round = models.IntegerField()
     file = models.FileField(upload_to='interaction_files/%Y/%m/')
@@ -200,6 +241,7 @@ class Quote(models.Model):
 
     # Identifikace
     id = models.CharField(primary_key=True, max_length=64)
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='quotes', null=True, blank=True)
     project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='quotes')
     project_name = models.CharField(max_length=255, blank=True, default='')  # Fallback když project=None
 
@@ -389,3 +431,45 @@ class QuoteLine(models.Model):
 
     class Meta:
         ordering = ['line_number', 'id']
+
+
+class ProjectAccess(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='access_entries')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='project_access_entries')
+    can_view = models.BooleanField(default=True)
+    can_edit = models.BooleanField(default=False)
+    granted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='project_access_granted')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('project', 'user')]
+
+
+class EditLock(models.Model):
+    resource_key = models.CharField(max_length=255, unique=True, db_index=True)
+    company = models.ForeignKey('Company', on_delete=models.CASCADE, related_name='edit_locks')
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='edit_locks')
+    locked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='edit_locks')
+    locked_by_display = models.CharField(max_length=255, blank=True, default='')
+    context = models.CharField(max_length=64, blank=True, default='')
+    expires_at = models.DateTimeField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class AuditLog(models.Model):
+    company = models.ForeignKey('Company', on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    actor_role = models.CharField(max_length=32, blank=True, default='')
+    action = models.CharField(max_length=64)
+    entity_type = models.CharField(max_length=64, blank=True, default='')
+    entity_id = models.CharField(max_length=128, blank=True, default='')
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    metadata_json = models.JSONField(default=dict, blank=True)
+    ip = models.CharField(max_length=64, blank=True, default='')
+    user_agent = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
