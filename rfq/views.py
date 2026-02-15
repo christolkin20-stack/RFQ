@@ -8,7 +8,7 @@ def app(request, bundle_id=None):
     if not request.user.is_authenticated:
         return redirect(f"/admin/login/?next={request.path}")
     return render(request, 'rfq/app.html', {
-        'build_version': 'django-v121-main-overview-stability',
+        'build_version': 'django-v122-main-visible-stability',
     })
 
 

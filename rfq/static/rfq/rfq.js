@@ -10534,6 +10534,12 @@ window.SystemApps.rfq = {
             const errEl = getEl('main-error');
             if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
 
+            // Safety: always show core main boxes (users may accidentally hide them in layout edit mode)
+            ['main-kpis','main-projects-table-box','main-countdown','main-top-suppliers'].forEach(id => {
+                const bx = document.querySelector(`.main-box[data-box-id="${id}"]`);
+                if (bx) bx.classList.remove('hidden-box');
+            });
+
             // Bind action buttons (re-bind each time to ensure they work)
             const btnMainRefresh = getEl('btn-main-refresh');
             const btnMainExport = getEl('btn-main-export');
@@ -18244,6 +18250,7 @@ Best regards`)}</textarea>
                                 localStorage.removeItem('rfq_projects_v1');
                                 localStorage.removeItem('rfq_active_project_id');
                                 localStorage.removeItem('rfq_current_view_state');
+                                localStorage.removeItem('rfq_main_projects_page');
                             } catch (e) { }
                             location.reload();
                         } catch (e) {
