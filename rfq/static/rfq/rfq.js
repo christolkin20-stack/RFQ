@@ -1013,37 +1013,52 @@ window.SystemApps.rfq = {
                         </div>
 
                         <div id="view-quotes" class="view-section hidden">
-                            <div class="toolbar">
-                                <input type="text" id="quotes-search" placeholder="Search quotes..." class="search-input">
-                                <select id="quotes-project-filter" class="filter-select" style="width: 150px;"><option value="">All Projects</option></select>
-                                <select id="quotes-supplier-filter" class="filter-select" style="width: 150px;"><option value="">All Suppliers</option></select>
-                                <select id="quotes-status-filter" class="filter-select" style="width: 120px;">
+                            <!-- HEADER BAR -->
+                            <div class="quotes-header-bar">
+                                <div class="quotes-header-left">
+                                    <span class="quotes-header-icon">💰</span>
+                                    <div>
+                                        <div class="quotes-header-title">Quotes Center</div>
+                                        <div class="quotes-header-sub">Central database of all supplier quotes across projects</div>
+                                    </div>
+                                </div>
+                                <div class="quotes-header-stats">
+                                    <div class="quotes-stat"><span id="qs-total-suppliers">0</span><label>Suppliers</label></div>
+                                    <div class="quotes-stat"><span id="qs-total-quotes">0</span><label>Quotes</label></div>
+                                    <div class="quotes-stat"><span id="qs-total-items">0</span><label>Line Items</label></div>
+                                    <div class="quotes-stat qs-active"><span id="qs-active-quotes">0</span><label>Active</label></div>
+                                </div>
+                            </div>
+
+                            <!-- TOOLBAR -->
+                            <div class="quotes-toolbar">
+                                <input type="text" id="quotes-search" placeholder="Search supplier, quote #..." class="search-input">
+                                <select id="quotes-project-filter" class="filter-select" style="width:150px;"><option value="">All Projects</option></select>
+                                <select id="quotes-supplier-filter" class="filter-select" style="width:150px;"><option value="">All Suppliers</option></select>
+                                <input type="text" id="quotes-number-filter" placeholder="Quote #..." class="search-input" style="width:130px;">
+                                <select id="quotes-status-filter" class="filter-select" style="width:120px;">
                                     <option value="">All Status</option>
                                     <option value="active">Active</option>
                                     <option value="expired">Expired</option>
                                 </select>
-                                <button id="btn-quotes-clear-filters" class="btn-secondary" type="button">Clear Filters</button>
-                                <button id="btn-quotes-refresh" class="btn-secondary">Refresh</button>
+                                <button id="btn-quotes-clear-filters" class="btn-secondary" type="button">Clear</button>
+                                <button id="btn-quotes-refresh" class="btn-secondary">↻ Refresh</button>
+                                <button id="btn-quotes-import" class="btn-secondary">📥 Import Excel</button>
+                                <input type="file" id="file-quotes-import" accept=".xlsx,.xls,.csv" style="display: none;">
                                 <button id="btn-quotes-create" class="btn-primary">➕ New Quote</button>
                             </div>
-                            <div class="table-wrapper sd-table-wrap">
-                                <table id="table-quotes" class="rfq-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Quote #</th>
-                                            <th>Supplier</th>
-                                            <th>Project</th>
-                                            <th>Items</th>
-                                            <th>Currency</th>
-                                            <th>Expire Date</th>
-                                            <th>Status</th>
-                                            <th>Created</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
+
+                            <!-- BREADCRUMB -->
+                            <div id="quotes-breadcrumb" class="quotes-breadcrumb hidden">
+                                <button id="quotes-bc-home" class="btn-text" type="button">⬅ All Suppliers</button>
+                                <span class="quotes-bc-sep">›</span>
+                                <span id="quotes-bc-supplier" class="quotes-bc-active"></span>
+                                <span id="quotes-bc-sep2" class="quotes-bc-sep hidden">›</span>
+                                <span id="quotes-bc-quote" class="quotes-bc-active hidden"></span>
                             </div>
+
+                            <!-- CONTENT AREA (dynamically swapped between 3 levels) -->
+                            <div id="quotes-content" class="quotes-content"></div>
                         </div>
 
                         <div id="view-export" class="view-section hidden">
@@ -1644,6 +1659,7 @@ window.SystemApps.rfq = {
         <button id="rfq-detail-cancel" class="rfq-btn-secondary">Cancel</button>
         <div class="rfq-wizard-footer-right">
           <button id="rfq-detail-save-draft" class="rfq-btn-secondary">Save as Draft</button>
+          <button id="rfq-detail-save-quote" class="rfq-btn-primary" style="background:#4338ca; color:white;">Save &amp; Create Quote</button>
           <button id="rfq-detail-save" class="rfq-btn-success">Save Quote to Items</button>
         </div>
       </div>
@@ -10019,7 +10035,7 @@ window.SystemApps.rfq = {
                 viewQuotes.classList.remove('hidden');
                 if (navQuotes) navQuotes.classList.add('active');
                 highlightDropdownParent('nav-dropdown-global');
-                renderQuotes();
+                if (typeof window.renderQuotes === 'function') window.renderQuotes();
             } else if (view === 'settings' && viewSettings) {
                 viewSettings.classList.remove('hidden');
                 if (navSettings) navSettings.classList.add('active');
@@ -26876,12 +26892,14 @@ Best regards`)}</textarea>
             const detailCancel = document.getElementById('rfq-detail-cancel');
             const detailSave = document.getElementById('rfq-detail-save');
             const detailSaveDraft = document.getElementById('rfq-detail-save-draft');
+            const detailSaveQuote = document.getElementById('rfq-detail-save-quote');
             const detailSelectAll = document.getElementById('rfq-detail-select-all');
 
             if (detailClose) detailClose.onclick = () => closeRFQDetailModal();
             if (detailCancel) detailCancel.onclick = () => closeRFQDetailModal();
             if (detailSave) detailSave.onclick = () => saveRFQDetailPrices(false);
             if (detailSaveDraft) detailSaveDraft.onclick = () => saveRFQDetailPrices(true);
+            if (detailSaveQuote) detailSaveQuote.onclick = () => saveRFQDetailPrices(false, true);
             if (detailSelectAll) {
                 detailSelectAll.onchange = () => {
                     document.querySelectorAll('#rfq-detail-tbody input[type="checkbox"]').forEach(cb => {
@@ -27448,10 +27466,15 @@ Best regards`)}</textarea>
                     targetHtml = `<span style="font-size:11px; font-weight:500; color:#667eea;">${formatNumber(targetEur, 2)} €</span>`;
                 }
 
+                const quoteNum = it.supData.quote_number || '';
+                const quoteBadge = quoteNum
+                    ? ` <span class="quote-badge" title="Quote: ${escapeHtml(quoteNum)}">Q#${escapeHtml(quoteNum.length > 12 ? quoteNum.substring(0, 12) + '…' : quoteNum)}</span>`
+                    : '';
+
                 let rowHTML = `<tr class="${isSelected ? 'selected' : ''}" data-idx="${it.itemIndex}" data-dn="${escapeHtml(it.dn)}">
                     <td><input type="checkbox" class="item-checkbox" data-idx="${it.itemIndex}" ${isSelected ? 'checked' : ''}></td>
                     <td>
-                        <a href="#" class="planner-item-link" data-idx="${it.itemIndex}">${escapeHtml(displayDn)}</a>
+                        <a href="#" class="planner-item-link" data-idx="${it.itemIndex}">${escapeHtml(displayDn)}</a>${quoteBadge}
                         ${it.comment ? ` <span title="${escapeHtml(it.comment)}" style="cursor:help;">💬</span>` : ''}
                     </td>
                     <td title="${escapeHtml(it.desc)}">${escapeHtml(it.desc.length > 25 ? it.desc.substring(0, 25) + '...' : it.desc)}</td>
@@ -27477,12 +27500,30 @@ Best regards`)}</textarea>
                         <span class="status-badge ${statusInfo.class}">${statusInfo.icon} ${statusInfo.label}</span>
                     </td>
                     <td style="text-align: center;">
-                        <button class="btn-planner-edit" data-idx="${it.itemIndex}" style="background:#007AFF; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer;">Edit</button>
+                        <button class="btn-planner-edit" data-idx="${it.itemIndex}" style="background:#007AFF; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:11px; cursor:pointer;">Edit</button>${quoteNum ? `<button class="btn-planner-view-quote" data-qn="${escapeHtml(quoteNum)}" title="View Quote ${escapeHtml(quoteNum)}">Q</button>` : ''}
                     </td>
                 </tr>`;
 
                 return rowHTML;
             }).join('');
+
+            // Bind Q (view quote) buttons
+            tbody.querySelectorAll('.btn-planner-view-quote').forEach(btn => {
+                btn.onclick = () => {
+                    const qn = btn.dataset.qn;
+                    if (qn && typeof switchView === 'function') {
+                        switchView('quotes');
+                        // Set search filter to quote number after a brief delay for render
+                        setTimeout(() => {
+                            const searchInput = document.getElementById('quotes-search');
+                            if (searchInput) {
+                                searchInput.value = qn;
+                                searchInput.dispatchEvent(new Event('input'));
+                            }
+                        }, 300);
+                    }
+                };
+            });
 
             // Bind click on drawing number to open Item Detail
             tbody.querySelectorAll('.planner-item-link').forEach(link => {
@@ -27675,6 +27716,12 @@ Best regards`)}</textarea>
 
                 // Save and refresh
                 if (window.RFQData && window.RFQData.updateProject) window.RFQData.updateProject(currentProject);
+
+                // If item already linked to a quote, sync the update
+                if (supData.quote_id) {
+                    syncPlannerToQuotes(supplierName, supData.quote_number || '', supData.currency || 'EUR', '', '', '', '');
+                }
+
                 renderPlannerItemsForSupplier(supplierName);
                 modal.remove();
             };
@@ -27811,6 +27858,12 @@ Best regards`)}</textarea>
 
                 // Save and refresh
                 if (window.RFQData && window.RFQData.updateProject) window.RFQData.updateProject(currentProject);
+
+                // If item already linked to a quote, sync the update
+                if (supData.quote_id) {
+                    syncPlannerToQuotes(supplierName, supData.quote_number || '', supData.currency || 'EUR', '', '', '', '');
+                }
+
                 renderPlannerItemsForSupplier(supplierName);
                 modal.remove();
             };
@@ -28494,7 +28547,7 @@ Best regards`)}</textarea>
             if (modal) modal.classList.add('hidden');
         }
 
-        function saveRFQDetailPrices(isDraft = false) {
+        function saveRFQDetailPrices(isDraft = false, alsoSyncQuote = false) {
             const modal = document.getElementById('rfq-detail-modal');
             const table = document.getElementById('rfq-detail-table');
             const tbody = table ? table.querySelector('tbody') : document.getElementById('rfq-detail-tbody');
@@ -28647,6 +28700,11 @@ Best regards`)}</textarea>
             // Save project
             if (window.RFQData && window.RFQData.updateProject) window.RFQData.updateProject(currentProject);
 
+            // Sync to Quotes DB if requested
+            if (alsoSyncQuote && !isDraft && savedCount > 0) {
+                syncPlannerToQuotes(supplierName, quoteNumber, currency, validUntil, incoterms, shippingCost, mov);
+            }
+
             // Clear selection
             plannerState.selectedItems.clear();
 
@@ -28658,6 +28716,101 @@ Best regards`)}</textarea>
             renderPlannerSuppliersList();
 
             showToast(`${isDraft ? 'Draft saved' : 'Saved prices'} for ${savedCount} items`, 'success');
+        }
+
+        /**
+         * Sync RFQ Planner data to Quotes DB via upsert endpoint.
+         * Collects all items for the supplier, maps qty/price tiers, and POSTs.
+         * On success, stores quote_id/quote_number back into each supData.
+         */
+        function syncPlannerToQuotes(supplierName, quoteNumber, currency, expireDate, incoterms, shippingCost, mov) {
+            if (!currentProject || !supplierName) return;
+
+            const items = currentProject.items || [];
+            const linesToSend = [];
+
+            items.forEach((item, idx) => {
+                const supData = _findSupplierOnItem(item, supplierName);
+                if (!supData) return;
+
+                const prices = Array.isArray(supData.prices) ? supData.prices : [];
+                const hasAnyPrice = prices.some(p => p.price && parseFloat(p.price) > 0) ||
+                    (supData.price_1 && parseFloat(supData.price_1) > 0);
+                if (!hasAnyPrice) return;
+
+                const linePayload = {
+                    item_id: item.id || String(idx),
+                    drawing_number: item.item_drawing_no || item.drawing_no || '',
+                    manufacturer: item.manufacturer || '',
+                    mpn: item.mpn || item.manufacturer_part_number || '',
+                    description: item.description || '',
+                    uom: item.unit || 'pcs',
+                    moq: String(supData.moq || '1'),
+                    lead_time: supData.lead_time || supData.leadTime || '',
+                };
+
+                // Map qty/price tiers
+                const qtyTiers = getItemQtyTiers(item, { includeBlanks: false });
+                qtyTiers.forEach((tier, i) => {
+                    const tierIdx = i + 1;
+                    const priceEntry = prices.find(p => String(p.qty) === String(tier.value));
+                    linePayload['qty_' + tierIdx] = String(tier.value);
+                    linePayload['price_' + tierIdx] = priceEntry
+                        ? parseFloat(priceEntry.price) || null
+                        : (parseFloat(supData['price_' + tierIdx]) || null);
+                });
+
+                linesToSend.push(linePayload);
+            });
+
+            if (linesToSend.length === 0) {
+                showToast('No items with prices to sync', 'warning');
+                return;
+            }
+
+            const payload = {
+                project_id: currentProject.id,
+                supplier_name: supplierName,
+                quote_number: quoteNumber || '',
+                currency: currency || 'EUR',
+                expire_date: expireDate || '',
+                incoterms: incoterms || '',
+                shipping_cost: shippingCost || '',
+                mov: mov || '',
+                items: linesToSend,
+            };
+
+            fetch('/api/quotes/upsert_from_planner/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.ok) {
+                    // Store quote references back into each supData
+                    (currentProject.items || []).forEach(item => {
+                        const supData = _findSupplierOnItem(item, supplierName);
+                        if (supData) {
+                            supData.quote_id = res.quote_id;
+                            supData.quote_number = res.quote_number;
+                        }
+                    });
+                    // Persist quote references
+                    if (window.RFQData && window.RFQData.updateProject) {
+                        window.RFQData.updateProject(currentProject);
+                    }
+                    // Refresh table to show quote badges
+                    renderPlannerItemsForSupplier(supplierName);
+                    showToast(`Quote ${res.quote_number} ${res.is_update ? 'updated' : 'created'} (${res.lines_count} items)`, 'success');
+                } else {
+                    showToast('Quote sync failed: ' + (res.error || 'Unknown error'), 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Quote sync error:', err);
+                showToast('Quote sync error: ' + err.message, 'error');
+            });
         }
 
         function openQuoteWizardWithItems(supplier, itemDNs) {
@@ -30437,8 +30590,6 @@ Best regards`)}</textarea>
 
                             // DEBUG: Log quote number data
                             if (supName === '1265') {
-                                console.log('[DEBUG Quote] Supplier 1265, sq object:', sq);
-                                console.log('[DEBUG Quote] quoteNum extracted:', quoteNum);
                             }
 
                             allSuppliersForItem.set(supName, {
@@ -31371,27 +31522,18 @@ Best regards`)}</textarea>
 
         // Send loser notification - open modal with custom text and ODF generation
         window.sendLoserNotification = function (supplierName) {
-            console.log('[DEBUG] sendLoserNotification called with:', supplierName);
-            console.log('[DEBUG] Type of supplierName:', typeof supplierName);
-            console.log('[DEBUG] wrapper exists:', !!window.fsState);
-            console.log('[DEBUG] nonAwardedData exists:', !!(window.fsState && window.fsState.nonAwardedData));
 
             if (window.fsState && window.fsState.nonAwardedData) {
-                console.log('[DEBUG] nonAwardedData keys:', Array.from(window.fsState.nonAwardedData.keys()));
             }
 
             let data = window.fsState.nonAwardedData?.get(supplierName);
-            console.log('[DEBUG] Direct lookup result:', data ? 'found' : 'not found');
 
             // Robust lookup: Try case-insensitive and trimmed match
             if (!data && window.fsState.nonAwardedData) {
                 const target = String(supplierName).trim().toLowerCase();
-                console.log('[DEBUG] Trying fuzzy match for:', target);
                 for (const [key, val] of window.fsState.nonAwardedData.entries()) {
                     const keyNorm = String(key).trim().toLowerCase();
-                    console.log(`[DEBUG] Comparing '${keyNorm}' with '${target}'`);
                     if (keyNorm === target) {
-                        console.log('[DEBUG] Fuzzy match found:', key);
                         data = val;
                         break;
                     }
@@ -31399,7 +31541,6 @@ Best regards`)}</textarea>
             }
 
             if (!data || data.items.length === 0) {
-                console.error('[DEBUG] No data found! supplierName:', supplierName, 'data:', data);
                 // Dump all keys for debugging
                 if (window.fsState && window.fsState.nonAwardedData) {
                     window.fsState.nonAwardedData.forEach((v, k) => {
@@ -31411,7 +31552,6 @@ Best regards`)}</textarea>
                 return;
             }
 
-            console.log('[DEBUG] Data found, items count:', data.items.length);
 
             const modal = document.createElement('div');
             modal.id = 'loser-notification-modal';
@@ -42807,592 +42947,874 @@ document.addEventListener('click', function (e) {
             if (myContent) myContent.classList.add('hidden');
         }
     }
+});
 
-        // =========================================================
-        // QUOTES - Centrální databáze nabídek
-        // =========================================================
-    
-        function renderQuotes() {
-            // Refresh projects list
-            if (typeof getProjects === 'function') projects = getProjects();
-    
-            const tbody = document.querySelector('#table-quotes tbody');
-            if (!tbody) return;
-    
-            // Get filter values
-            const searchEl = document.getElementById('quotes-search');
-            const projectFilterEl = document.getElementById('quotes-project-filter');
-            const supplierFilterEl = document.getElementById('quotes-supplier-filter');
-            const statusFilterEl = document.getElementById('quotes-status-filter');
-    
-            const search = searchEl ? String(searchEl.value || '').trim() : '';
-            const projectId = projectFilterEl ? projectFilterEl.value : '';
-            const supplier = supplierFilterEl ? supplierFilterEl.value : '';
-            const status = statusFilterEl ? statusFilterEl.value : '';
-    
-            // Populate project filter if empty
-            if (projectFilterEl && projectFilterEl.options.length <= 1) {
-                projects.forEach(p => {
+// =========================================================
+// QUOTES CENTER - Centrální databáze nabídek (global scope)
+// 3-level hierarchical view: Supplier Cards → Quotes → Detail
+// =========================================================
+
+const _qEsc = (text) => text ? String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]) : '';
+
+function _qFetchJson(url, opts = {}) {
+    const headers = Object.assign({ 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, opts.headers || {});
+    return fetch(url, Object.assign({}, opts, { headers })).then(r => r.json());
+}
+
+function _qGetProjects() {
+    return (window.RFQData && typeof window.RFQData.getProjects === 'function') ? window.RFQData.getProjects() : [];
+}
+
+/* --- Quotes Center state --- */
+let _quotesCache = [];
+let _quotesLevel = 1;
+let _quotesSupplier = null;
+
+/* --- Helper functions --- */
+function _updateQuotesStats(quotes) {
+    const suppliers = new Set();
+    let totalItems = 0;
+    let activeCount = 0;
+    const now = new Date();
+    quotes.forEach(q => {
+        if (q.supplier_name) suppliers.add(q.supplier_name);
+        totalItems += (q.lines_count || q.lines?.length || 0);
+        const exp = q.expire_date ? new Date(q.expire_date) : null;
+        if (!exp || exp >= now) activeCount++;
+    });
+    const el = id => document.getElementById(id);
+    const s = el('qs-total-suppliers');
+    const t = el('qs-total-quotes');
+    const i = el('qs-total-items');
+    const a = el('qs-active-quotes');
+    if (s) s.textContent = suppliers.size;
+    if (t) t.textContent = quotes.length;
+    if (i) i.textContent = totalItems;
+    if (a) a.textContent = activeCount;
+}
+
+function _showBreadcrumb(show) {
+    const bc = document.getElementById('quotes-breadcrumb');
+    if (bc) bc.classList.toggle('hidden', !show);
+}
+
+function _setBreadcrumb(supplier, quoteNum) {
+    const bcSup = document.getElementById('quotes-bc-supplier');
+    const bcSep2 = document.getElementById('quotes-bc-sep2');
+    const bcQ = document.getElementById('quotes-bc-quote');
+    if (bcSup) bcSup.textContent = supplier || '';
+    if (bcSep2) bcSep2.classList.toggle('hidden', !quoteNum);
+    if (bcQ) { bcQ.textContent = quoteNum || ''; bcQ.classList.toggle('hidden', !quoteNum); }
+}
+
+function _avatarColor(name) {
+    const colors = ['#007AFF', '#5856d6', '#ff9500', '#34c759', '#ff3b30', '#af52de', '#ff2d55', '#00c7be', '#30b0c7', '#a2845e'];
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+    return colors[Math.abs(h) % colors.length];
+}
+
+function _fmtDate(d) {
+    if (!d) return '\u2014';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '\u2014';
+    return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/* --- Level 1: Supplier Cards --- */
+function _renderQuotesLevel1() {
+    const content = document.getElementById('quotes-content');
+    if (!content) return;
+    _quotesLevel = 1;
+    _quotesSupplier = null;
+    _showBreadcrumb(false);
+
+    if (_quotesCache.length === 0) {
+        content.innerHTML = `<div class="quotes-empty">
+            <div class="quotes-empty-icon">📋</div>
+            <div class="quotes-empty-title">No Quotes Yet</div>
+            <div class="quotes-empty-sub">Create your first quote by clicking "➕ New Quote" above, or quotes will appear here when imported from the Quoting module or Supplier Portal.</div>
+        </div>`;
+        return;
+    }
+
+    const bySupplier = {};
+    const now = new Date();
+    _quotesCache.forEach(q => {
+        const sup = q.supplier_name || 'Unknown';
+        if (!bySupplier[sup]) bySupplier[sup] = { quotes: [], projects: new Set(), items: 0, active: 0, lastDate: null };
+        const grp = bySupplier[sup];
+        grp.quotes.push(q);
+        if (q.project_name) grp.projects.add(q.project_name);
+        grp.items += (q.lines_count || q.lines?.length || 0);
+        const exp = q.expire_date ? new Date(q.expire_date) : null;
+        if (!exp || exp >= now) grp.active++;
+        const cd = q.create_date ? new Date(q.create_date) : null;
+        if (cd && (!grp.lastDate || cd > grp.lastDate)) grp.lastDate = cd;
+    });
+
+    const sorted = Object.entries(bySupplier).sort((a, b) => b[1].quotes.length - a[1].quotes.length);
+
+    let html = '<div class="quotes-supplier-grid">';
+    sorted.forEach(([name, grp]) => {
+        const initials = name.split(/\s+/).map(w => w[0]).join('').substring(0, 2).toUpperCase();
+        const color = _avatarColor(name);
+        const projStr = grp.projects.size > 0 ? Array.from(grp.projects).slice(0, 3).join(', ') + (grp.projects.size > 3 ? ` +${grp.projects.size - 3}` : '') : 'No project';
+        const expired = grp.quotes.length - grp.active;
+        const lastDt = grp.lastDate ? _fmtDate(grp.lastDate) : '\u2014';
+
+        html += `<div class="quotes-supplier-card" data-supplier="${_qEsc(name)}">
+            <div class="qs-card-header">
+                <div class="qs-card-avatar" style="background:${color}">${initials}</div>
+                <div style="flex:1; min-width:0;">
+                    <div class="qs-card-name">${_qEsc(name)}</div>
+                    <div class="qs-card-projects">${_qEsc(projStr)}</div>
+                </div>
+            </div>
+            <div class="qs-card-stats">
+                <div class="qs-card-stat"><div class="qs-card-stat-val">${grp.quotes.length}</div><div class="qs-card-stat-label">Quotes</div></div>
+                <div class="qs-card-stat"><div class="qs-card-stat-val">${grp.items}</div><div class="qs-card-stat-label">Items</div></div>
+                <div class="qs-card-stat"><div class="qs-card-stat-val">${grp.active}</div><div class="qs-card-stat-label">Active</div></div>
+            </div>
+            <div class="qs-card-footer">
+                <span>Last: ${lastDt}</span>
+                ${expired > 0 ? `<span class="qs-card-badge expired">${expired} expired</span>` : `<span class="qs-card-badge active">All active</span>`}
+            </div>
+        </div>`;
+    });
+    html += '</div>';
+    content.innerHTML = html;
+
+    content.querySelectorAll('.quotes-supplier-card[data-supplier]').forEach(card => {
+        card.addEventListener('click', () => {
+            const supplierName = card.getAttribute('data-supplier');
+            if (supplierName) window._quotesOpenSupplier(supplierName);
+        });
+    });
+}
+
+window._quotesOpenSupplier = function(name) {
+    _quotesSupplier = name;
+    _renderQuotesLevel2(name);
+};
+
+/* --- Level 2: Quote List for Supplier --- */
+function _renderQuotesLevel2(supplierName) {
+    const content = document.getElementById('quotes-content');
+    if (!content) return;
+    _quotesLevel = 2;
+    _showBreadcrumb(true);
+    _setBreadcrumb(supplierName, null);
+
+    const quotes = _quotesCache.filter(q => q.supplier_name === supplierName);
+    const now = new Date();
+
+    if (quotes.length === 0) {
+        content.innerHTML = `<div class="quotes-empty">
+            <div class="quotes-empty-icon">📄</div>
+            <div class="quotes-empty-title">No quotes for ${_qEsc(supplierName)}</div>
+            <div class="quotes-empty-sub">This supplier has no quotes matching current filters.</div>
+        </div>`;
+        return;
+    }
+
+    quotes.sort((a, b) => {
+        const da = a.create_date ? new Date(a.create_date) : new Date(0);
+        const db = b.create_date ? new Date(b.create_date) : new Date(0);
+        return db - da;
+    });
+
+    let html = `<div style="background:#fff; border:1px solid rgba(0,0,0,.06); border-radius:14px; overflow:hidden;">
+        <table class="quotes-list-table"><thead><tr>
+            <th>Quote #</th><th>Project</th><th>Items</th><th>Currency</th><th>Expire Date</th><th>Status</th><th>Created</th><th>Actions</th>
+        </tr></thead><tbody>`;
+
+    quotes.forEach(q => {
+        const expD = q.expire_date ? new Date(q.expire_date) : null;
+        const isExpired = expD && expD < now;
+        const statusHtml = isExpired
+            ? '<span class="qs-status-badge" style="background:#ff3b30;">Expired</span>'
+            : '<span class="qs-status-badge" style="background:#34c759;">Active</span>';
+        const linesCount = q.lines_count || q.lines?.length || 0;
+        const qId = _qEsc(String(q.id));
+
+        html += `<tr data-quote-id="${qId}">
+            <td class="qs-quote-num" style="cursor:pointer;" onclick="window._quotesOpenDetail('${qId}')">${_qEsc(q.quote_number || '\u2014')}</td>
+            <td>${_qEsc(q.project_name || '\u2014')}</td>
+            <td style="text-align:center;">${linesCount}</td>
+            <td>${_qEsc(q.currency || 'EUR')}</td>
+            <td style="color:${isExpired ? '#ff3b30' : '#34c759'}; font-weight:600;">${_fmtDate(q.expire_date)}</td>
+            <td>${statusHtml}</td>
+            <td style="color:#888;">${_fmtDate(q.create_date)}</td>
+            <td>
+                <button class="btn-primary btn-sm" onclick="event.stopPropagation(); window._quotesOpenDetail('${qId}')" type="button">View</button>
+                <button class="btn-secondary btn-sm" onclick="event.stopPropagation(); window.showQuoteEditModal('${qId}')" type="button">Edit</button>
+                <button class="btn-text btn-sm" style="color:#d00;" onclick="event.stopPropagation(); window.deleteQuote('${qId}')" type="button">🗑</button>
+            </td>
+        </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+}
+
+/* --- Level 3: Quote Detail --- */
+window._quotesOpenDetail = function(quoteId) {
+    const q = _quotesCache.find(q => String(q.id) === String(quoteId));
+    if (q) {
+        _renderQuotesLevel3(q);
+    } else {
+        _qFetchJson(`/api/quotes/${quoteId}/`, { method: 'GET' })
+            .then(res => {
+                if (res && res.quote) _renderQuotesLevel3(res.quote);
+                else window.showAlert && window.showAlert('Quote not found');
+            })
+            .catch(err => { console.error('Error loading quote:', err); window.showAlert && window.showAlert('Error loading quote'); });
+    }
+};
+
+function _renderQuotesLevel3(quote) {
+    const content = document.getElementById('quotes-content');
+    if (!content) return;
+    _quotesLevel = 3;
+    _showBreadcrumb(true);
+    _setBreadcrumb(quote.supplier_name || '\u2014', quote.quote_number || quote.id);
+
+    const lines = quote.lines || [];
+    if (lines.length === 0 && (quote.lines_count > 0 || !quote.hasOwnProperty('lines'))) {
+        content.innerHTML = '<div style="padding:32px; text-align:center; color:#888;">Loading quote details...</div>';
+        _qFetchJson(`/api/quotes/${quote.id}/`, { method: 'GET' })
+            .then(res => { _renderQuoteDetailCard(res && res.quote ? res.quote : quote); })
+            .catch(() => _renderQuoteDetailCard(quote));
+        return;
+    }
+    _renderQuoteDetailCard(quote);
+}
+
+function _renderQuoteDetailCard(quote) {
+    const content = document.getElementById('quotes-content');
+    if (!content) return;
+
+    const now = new Date();
+    const expD = quote.expire_date ? new Date(quote.expire_date) : null;
+    const isExpired = expD && expD < now;
+    const statusLabel = isExpired ? '🔴 Expired' : '🟢 Active';
+    const lines = quote.lines || [];
+    const qId = _qEsc(String(quote.id));
+
+    const field = (label, value, extraClass) => {
+        if (!value && value !== 0) return '';
+        return `<div class="qd-field"><div class="qd-field-label">${label}</div><div class="qd-field-value ${extraClass || ''}">${_qEsc(String(value))}</div></div>`;
+    };
+
+    const buildTiers = (line) => {
+        let html = '';
+        for (let i = 1; i <= 10; i++) {
+            const qty = line['qty_' + i];
+            const price = line['price_' + i];
+            if (qty && price !== null && price !== undefined) {
+                html += `<div style="display:flex; gap:6px; font-size:12px; margin-bottom:2px;">
+                    <span style="color:#888; min-width:60px;">${_qEsc(String(qty))} ${_qEsc(line.uom || 'pcs')}:</span>
+                    <span style="font-weight:700;">${_qEsc(String(price))} ${_qEsc(quote.currency || 'EUR')}</span>
+                </div>`;
+            }
+        }
+        return html || '<span style="color:#bbb;">\u2014</span>';
+    };
+
+    let linesHtml = '';
+    if (lines.length === 0) {
+        linesHtml = '<tr><td colspan="12" style="padding:20px; text-align:center; color:#888;">No line items</td></tr>';
+    } else {
+        lines.forEach((ln, idx) => {
+            const stockInfo = ln.available_stock ? `${ln.available_stock} <span style="font-size:10px; color:#888;">(${_fmtDate(ln.available_stock_date)})</span>` : '\u2014';
+            const leadTime = _qEsc(ln.supplier_lead_time || ln.manufacturing_lead_time || '\u2014');
+            linesHtml += `<tr>
+                <td style="font-weight:600;">${idx + 1}</td>
+                <td>${_qEsc(ln.drawing_number || '\u2014')}</td>
+                <td>${_qEsc(ln.manufacturer || '\u2014')}</td>
+                <td style="font-weight:600;">${_qEsc(ln.mpn || '\u2014')}</td>
+                <td style="max-width:180px; color:#666; font-size:11px;">${_qEsc(ln.description || '\u2014')}</td>
+                <td>${_qEsc(ln.uom || 'pcs')}</td>
+                <td style="min-width:140px;">${buildTiers(ln)}</td>
+                <td style="text-align:center;">${_qEsc(String(ln.moq || 1))}</td>
+                <td>${leadTime}</td>
+                <td>${stockInfo}</td>
+                <td style="color:#666; font-style:italic; font-size:11px;">${_qEsc(ln.notes || '')}</td>
+                <td>
+                    <button class="btn-secondary btn-sm" onclick="window.exportQuoteLineToItem('${_qEsc(quote.project_id || '')}', '${ln.id}', '${_qEsc(quote.quote_number || '')}')" title="Export to Project Item">⇪ Item</button>
+                </td>
+            </tr>`;
+        });
+    }
+
+    const html = `<div class="quotes-detail-wrap">
+        <div class="quotes-detail-header">
+            <div class="qd-title-area">
+                <div class="qd-quote-num">📄 ${_qEsc(quote.quote_number || quote.id || '\u2014')}</div>
+                <div class="qd-supplier">${_qEsc(quote.supplier_name || '\u2014')}</div>
+                <div class="qd-project">Project: ${_qEsc(quote.project_name || '\u2014')}</div>
+            </div>
+            <div class="qd-actions">
+                <span class="qs-status-badge" style="background:${isExpired ? '#ff3b30' : '#34c759'}; padding:6px 14px; font-size:12px;">${statusLabel}</span>
+                <button class="btn-secondary btn-sm" onclick="window.showQuoteEditModal('${qId}')" type="button">✏️ Edit</button>
+                <button class="btn-text btn-sm" style="color:#d00;" onclick="window.deleteQuote('${qId}')" type="button">🗑 Delete</button>
+            </div>
+        </div>
+        <div class="quotes-detail-meta">
+            ${field('Status', statusLabel, isExpired ? 'expired' : 'active')}
+            ${field('Created', _fmtDate(quote.create_date))}
+            ${field('Expires', _fmtDate(quote.expire_date), isExpired ? 'expired' : 'active')}
+            ${field('Currency', quote.currency || 'EUR')}
+            ${field('Received From', quote.received_from)}
+            ${field('Incoterm', quote.incoterm)}
+            ${field('Payment Terms', quote.payment_terms)}
+            ${field('Shipping Cost', quote.shipping_cost)}
+            ${field('MOV', quote.mov)}
+            ${field('Extra Charge', quote.extra_charge)}
+            ${field('Packaging', quote.packaging)}
+            ${field('Source', quote.source || 'manual')}
+        </div>
+        <div class="quotes-detail-section">
+            <div class="qd-section-title">Line Items (${lines.length})</div>
+            <div style="overflow-x:auto; border:1px solid #e2e8f0; border-radius:6px;">
+                <table class="rfq-table" style="font-size:12px;">
+                    <thead><tr><th style="width:40px;">#</th><th>Drawing No</th><th>Manufacturer</th><th>MPN</th><th>Description</th><th>UOM</th><th>Price Tiers</th><th>MOQ</th><th>Lead Time</th><th>Stock</th><th>Line Notes</th><th>Actions</th></tr></thead>
+                    <tbody>${linesHtml}</tbody>
+                </table>
+            </div>
+        </div>
+        ${quote.notes ? `<div class="quotes-detail-section"><div class="qd-section-title">Notes</div><div class="qd-notes">${_qEsc(quote.notes)}</div></div>` : ''}
+        ${quote.attachment_name ? `<div class="quotes-detail-section"><div class="qd-section-title">Attachment</div><a href="${_qEsc(quote.attachment || '#')}" target="_blank" style="color:#007AFF; font-size:13px; text-decoration:underline;">📎 ${_qEsc(quote.attachment_name)}</a></div>` : ''}
+        <div class="qd-footer">
+            ${quote.created_by ? `<span>Created by: ${_qEsc(quote.created_by)}</span>` : ''}
+            ${quote.updated_at ? `<span>Updated: ${_fmtDate(quote.updated_at)}</span>` : ''}
+            <span>Source: ${_qEsc(quote.source || 'manual')}</span>
+        </div>
+    </div>`;
+
+    content.innerHTML = html;
+}
+
+/* --- Main renderQuotes (Level 1 entry point) --- */
+function renderQuotes() {
+    const projects = _qGetProjects();
+    const content = document.getElementById('quotes-content');
+    if (!content) return;
+
+    const projectFilterEl = document.getElementById('quotes-project-filter');
+    if (projectFilterEl && projectFilterEl.options.length <= 1) {
+        (projects || []).forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            projectFilterEl.appendChild(opt);
+        });
+    }
+
+    const searchEl = document.getElementById('quotes-search');
+    const statusFilterEl = document.getElementById('quotes-status-filter');
+    const supplierFilterEl = document.getElementById('quotes-supplier-filter');
+    const numberFilterEl = document.getElementById('quotes-number-filter');
+
+    const search = searchEl ? String(searchEl.value || '').trim() : '';
+    const projectId = projectFilterEl ? projectFilterEl.value : '';
+    const status = statusFilterEl ? statusFilterEl.value : '';
+    const supplierFilter = supplierFilterEl ? supplierFilterEl.value : '';
+    const numberFilter = numberFilterEl ? String(numberFilterEl.value || '').trim().toLowerCase() : '';
+
+    let url = '/api/quotes/';
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (projectId) params.append('project_id', projectId);
+    if (supplierFilter) params.append('supplier', supplierFilter);
+    if (status === 'active') params.append('expired', 'false');
+    else if (status === 'expired') params.append('expired', 'true');
+    if (params.toString()) url += '?' + params.toString();
+
+    content.innerHTML = '<div style="padding:32px; text-align:center; color:#888;">Loading quotes...</div>';
+
+    _qFetchJson(url, { method: 'GET' })
+        .then(res => {
+            let quotes = (res && res.quotes) ? res.quotes : [];
+            if (numberFilter) {
+                quotes = quotes.filter(q => (q.quote_number || '').toLowerCase().includes(numberFilter));
+            }
+            _quotesCache = quotes;
+            _quotesLevel = 1;
+            _quotesSupplier = null;
+            _updateQuotesStats(_quotesCache);
+            _renderQuotesLevel1();
+
+            if (supplierFilterEl && supplierFilterEl.options.length <= 1 && res && res.quotes) {
+                const allSuppliers = new Set();
+                res.quotes.forEach(q => { if (q.supplier_name) allSuppliers.add(q.supplier_name); });
+                Array.from(allSuppliers).sort().forEach(sup => {
                     const opt = document.createElement('option');
-                    opt.value = p.id;
-                    opt.textContent = p.name;
-                    projectFilterEl.appendChild(opt);
+                    opt.value = sup;
+                    opt.textContent = sup;
+                    supplierFilterEl.appendChild(opt);
                 });
             }
-    
-            // Build API URL with filters
-            let url = '/rfq/api/quotes/';
-            const params = new URLSearchParams();
-            if (search) params.append('search', search);
-            if (projectId) params.append('project_id', projectId);
-            if (supplier) params.append('supplier', supplier);
-            if (status === 'active') params.append('expired', 'false');
-            else if (status === 'expired') params.append('expired', 'true');
-            if (params.toString()) url += '?' + params.toString();
-    
-            tbody.innerHTML = '<tr><td colspan="9" style="padding:14px; text-align:center; color:#888;">Loading...</td></tr>';
-    
-            _fetchJson(url, { method: 'GET' })
-                .then(res => {
-                    if (!res || !res.quotes) {
-                        tbody.innerHTML = '<tr><td colspan="9" style="padding:14px; text-align:center; color:#888;">No quotes found</td></tr>';
-                        return;
+        })
+        .catch(err => {
+            console.error('Failed to load quotes:', err);
+            content.innerHTML = '<div style="padding:32px; text-align:center; color:#dc2626;">Error loading quotes</div>';
+        });
+}
+window.renderQuotes = renderQuotes;
+
+/* --- Modal: Quote Detail (popup) --- */
+window.showQuoteDetail = function(quoteId) {
+    if (!quoteId) return;
+    _qFetchJson(`/api/quotes/${quoteId}/`, { method: 'GET' })
+        .then(res => {
+            if (!res || !res.quote) { window.showAlert('Failed to load quote details'); return; }
+            const quote = res.quote;
+            const lines = quote.lines || [];
+            let linesHtml = '';
+            if (lines.length === 0) {
+                linesHtml = '<tr><td colspan="8" style="padding:14px; text-align:center; color:#888;">No items</td></tr>';
+            } else {
+                linesHtml = lines.map(line => {
+                    let tierCells = '';
+                    for (let i = 1; i <= 10; i++) {
+                        const qty = line[`qty_${i}`];
+                        const price = line[`price_${i}`];
+                        if (qty && price !== null) {
+                            tierCells += `<div style="display:flex; gap:8px; margin-bottom:4px;">
+                                <span style="color:#64748b; min-width:60px;">${_qEsc(String(qty))} ${_qEsc(line.uom || 'pcs')}:</span>
+                                <span style="font-weight:600;">${_qEsc(String(price))} ${_qEsc(quote.currency || 'EUR')}</span>
+                            </div>`;
+                        }
                     }
-    
-                    const quotes = res.quotes || [];
-    
-                    // Populate supplier filter
-                    if (supplierFilterEl && supplierFilterEl.options.length <= 1) {
-                        const suppliers = new Set();
-                        quotes.forEach(q => {
-                            if (q.supplier_name) suppliers.add(q.supplier_name);
-                        });
-                        Array.from(suppliers).sort().forEach(sup => {
-                            const opt = document.createElement('option');
-                            opt.value = sup;
-                            opt.textContent = sup;
-                            supplierFilterEl.appendChild(opt);
-                        });
-                    }
-    
-                    if (quotes.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" style="padding:14px; text-align:center; color:#888;">No quotes found</td></tr>';
-                        return;
-                    }
-    
-                    const rows = quotes.map(q => {
-                        const expireDate = q.expire_date ? new Date(q.expire_date) : null;
-                        const isExpired = expireDate && expireDate < new Date();
-                        const statusBadge = isExpired
-                            ? '<span style="padding:3px 8px; background:#fee2e2; color:#dc2626; border-radius:4px; font-size:11px; font-weight:600;">Expired</span>'
-                            : '<span style="padding:3px 8px; background:#d1fae5; color:#059669; border-radius:4px; font-size:11px; font-weight:600;">Active</span>';
-    
-                        const createDate = q.create_date ? new Date(q.create_date).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) : '-';
-                        const expireDateStr = expireDate ? expireDate.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) : '-';
-    
-                        return `
-                            <tr data-quote-id="${escapeAttr(q.id)}">
-                                <td style="font-weight:600;">${escapeHtml(q.quote_number || '-')}</td>
-                                <td>${escapeHtml(q.supplier_name || '-')}</td>
-                                <td>${escapeHtml(q.project_name || '-')}</td>
-                                <td style="text-align:center;">${q.lines_count || 0}</td>
-                                <td>${escapeHtml(q.currency || 'EUR')}</td>
-                                <td style="color:${isExpired ? '#dc2626' : '#059669'};">${expireDateStr}</td>
-                                <td>${statusBadge}</td>
-                                <td style="color:#64748b;">${createDate}</td>
-                                <td>
-                                    <button class="btn-primary btn-sm quote-view" data-quote-id="${escapeAttr(q.id)}" type="button">View</button>
-                                    <button class="btn-secondary btn-sm quote-edit" data-quote-id="${escapeAttr(q.id)}" type="button">Edit</button>
-                                    <button class="btn-danger btn-sm quote-delete" data-quote-id="${escapeAttr(q.id)}" type="button">Delete</button>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('');
-    
-                    tbody.innerHTML = rows;
-    
-                    // Add event listeners for action buttons
-                    tbody.querySelectorAll('.quote-view').forEach(btn => {
-                        btn.onclick = () => showQuoteDetail(btn.getAttribute('data-quote-id'));
-                    });
-                    tbody.querySelectorAll('.quote-edit').forEach(btn => {
-                        btn.onclick = () => showQuoteEditModal(btn.getAttribute('data-quote-id'));
-                    });
-                    tbody.querySelectorAll('.quote-delete').forEach(btn => {
-                        btn.onclick = () => deleteQuote(btn.getAttribute('data-quote-id'));
-                    });
-                })
-                .catch(err => {
-                    console.error('Failed to load quotes:', err);
-                    tbody.innerHTML = '<tr><td colspan="9" style="padding:14px; text-align:center; color:#dc2626;">Error loading quotes</td></tr>';
-                });
-        }
-    
-        function showQuoteDetail(quoteId) {
-            if (!quoteId) return;
-    
-            const url = `/rfq/api/quotes/${quoteId}/`;
-            _fetchJson(url, { method: 'GET' })
-                .then(res => {
-                    if (!res || !res.quote) {
-                        window.showAlert('Failed to load quote details');
-                        return;
-                    }
-    
-                    const quote = res.quote;
-                    const lines = quote.lines || [];
-    
-                    // Build lines table with dynamic price tiers
-                    let linesHtml = '';
-                    if (lines.length === 0) {
-                        linesHtml = '<tr><td colspan="8" style="padding:14px; text-align:center; color:#888;">No items</td></tr>';
-                    } else {
-                        linesHtml = lines.map(line => {
-                            let tierCells = '';
-                            for (let i = 1; i <= 10; i++) {
-                                const qty = line[`qty_${i}`];
-                                const price = line[`price_${i}`];
-                                if (qty && price !== null) {
-                                    tierCells += `<div style="display:flex; gap:8px; margin-bottom:4px;">
-                                        <span style="color:#64748b; min-width:60px;">${escapeHtml(String(qty))} ${escapeHtml(line.uom || 'pcs')}:</span>
-                                        <span style="font-weight:600;">${escapeHtml(String(price))} ${escapeHtml(quote.currency || 'EUR')}</span>
-                                    </div>`;
-                                }
-                            }
-                            if (!tierCells) tierCells = '<span style="color:#888;">-</span>';
-    
-                            return `<tr>
-                                <td>${escapeHtml(line.drawing_number || '-')}</td>
-                                <td>${escapeHtml(line.manufacturer || '-')}</td>
-                                <td>${escapeHtml(line.mpn || '-')}</td>
-                                <td style="max-width:200px; color:#64748b; font-size:12px;">${escapeHtml(line.description || '-')}</td>
-                                <td style="min-width:150px;">${tierCells}</td>
-                                <td style="text-align:center;">${escapeHtml(String(line.moq || 1))}</td>
-                                <td>${escapeHtml(line.supplier_lead_time || '14 days')}</td>
-                                <td>${escapeHtml(line.notes || '-')}</td>
-                            </tr>`;
-                        }).join('');
-                    }
-    
-                    const expireDate = quote.expire_date ? new Date(quote.expire_date) : null;
-                    const isExpired = expireDate && expireDate < new Date();
-                    const statusBadge = isExpired
-                        ? '<span style="padding:4px 10px; background:#fee2e2; color:#dc2626; border-radius:6px; font-size:12px; font-weight:600;">Expired</span>'
-                        : '<span style="padding:4px 10px; background:#d1fae5; color:#059669; border-radius:6px; font-size:12px; font-weight:600;">Active</span>';
-    
-                    const createDate = quote.create_date ? new Date(quote.create_date).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) : '-';
-                    const expireDateStr = expireDate ? expireDate.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) : '-';
-    
-                    const modalHtml = `<div class="rfq-modal-overlay" id="quote-detail-modal">
-                        <div class="rfq-modal" style="max-width: 1200px; width: 90%;">
-                            <div class="rfq-modal-header">
-                                <div class="rfq-modal-title">Quote: ${escapeHtml(quote.quote_number || '')}</div>
-                                <button class="rfq-btn-close" onclick="document.getElementById('quote-detail-modal').remove()">&times;</button>
-                            </div>
-                            <div class="rfq-modal-body" style="max-height: 70vh; overflow-y: auto;">
-                                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:20px;">
-                                    <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Supplier</div>
-                                        <div style="font-weight:600;">${escapeHtml(quote.supplier_name || '-')}</div>
-                                        ${quote.received_from ? `<div style="font-size:12px; color:#64748b; margin-top:2px;">Contact: ${escapeHtml(quote.received_from)}</div>` : ''}</div>
-                                    <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Project</div>
-                                        <div style="font-weight:600;">${escapeHtml(quote.project_name || '-')}</div></div>
-                                    <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Status</div><div>${statusBadge}</div></div>
-                                    <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Created</div><div>${createDate}</div></div>
-                                    <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Expires</div>
-                                        <div style="color:${isExpired ? '#dc2626' : '#059669'}; font-weight:600;">${expireDateStr}</div></div>
-                                    <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Currency</div><div>${escapeHtml(quote.currency || 'EUR')}</div></div>
-                                    ${quote.incoterm ? `<div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Incoterm</div><div>${escapeHtml(quote.incoterm)}</div></div>` : ''}
-                                    ${quote.payment_terms ? `<div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Payment Terms</div><div>${escapeHtml(quote.payment_terms)}</div></div>` : ''}
-                                </div>
-                                <div style="margin-bottom:16px;">
-                                    <h4 style="margin:0 0 12px 0; font-size:14px;">Items (${lines.length})</h4>
-                                    <div class="table-wrapper" style="max-height:400px; overflow-y:auto;">
-                                        <table class="rfq-table">
-                                            <thead><tr><th>Drawing No</th><th>Manufacturer</th><th>MPN</th><th>Description</th><th>Price Tiers</th><th>MOQ</th><th>Lead Time</th><th>Notes</th></tr></thead>
-                                            <tbody>${linesHtml}</tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                ${quote.notes ? `<div style="padding:12px; background:#fffbeb; border-left:3px solid #f59e0b; border-radius:0 6px 6px 0; margin-top:16px;">
-                                    <div style="font-size:11px; color:#92400e; margin-bottom:6px; font-weight:600;">Notes:</div>
-                                    <div style="font-size:13px; color:#78350f; white-space:pre-wrap;">${escapeHtml(quote.notes)}</div></div>` : ''}
-                                <div style="margin-top:16px; padding-top:12px; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8;">
-                                    Source: ${escapeHtml(quote.source || 'manual')}${quote.created_by ? ` • Created by: ${escapeHtml(quote.created_by)}` : ''}</div>
-                            </div>
-                            <div class="rfq-modal-footer">
-                                <button class="rfq-btn-secondary" onclick="document.getElementById('quote-detail-modal').remove()">Close</button>
-                                <button class="rfq-btn-primary" onclick="document.getElementById('quote-detail-modal').remove(); showQuoteEditModal('${escapeAttr(quoteId)}')">Edit</button>
-                            </div>
-                        </div>
-                    </div>`;
-    
-                    document.body.insertAdjacentHTML('beforeend', modalHtml);
-                    const modal = document.getElementById('quote-detail-modal');
-                    if (modal) modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-                })
-                .catch(err => {
-                    console.error('Failed to load quote detail:', err);
-                    window.showAlert('Error loading quote details');
-                });
-        }
-    
-        function showQuoteEditModal(quoteId) {
-            if (!quoteId) return;
-            // Open Django Admin edit page in new tab
-            const adminUrl = `/admin/rfq/quote/${quoteId}/change/`;
-            window.open(adminUrl, '_blank');
-            window.showAlert('Quote edit opened in new tab.\nAfter saving in Admin, click Refresh to update the list.');
-        }
-    
-        function showQuoteCreateModal() {
-            // Refresh projects list
-            if (typeof getProjects === 'function') projects = getProjects();
-    
-            // Build project options
-            const projectOptions = (projects || []).map(p => `<option value="${escapeAttr(p.id)}">${escapeHtml(p.name || p.id)}</option>`).join('');
-    
-            const modalHtml = `<div class="rfq-modal-overlay" id="quote-create-modal">
-                <div class="rfq-modal" style="max-width: 900px; width: 90%;">
+                    if (!tierCells) tierCells = '<span style="color:#888;">-</span>';
+                    return `<tr>
+                        <td>${_qEsc(line.drawing_number || '-')}</td>
+                        <td>${_qEsc(line.manufacturer || '-')}</td>
+                        <td>${_qEsc(line.mpn || '-')}</td>
+                        <td style="max-width:200px; color:#64748b; font-size:12px;">${_qEsc(line.description || '-')}</td>
+                        <td style="min-width:150px;">${tierCells}</td>
+                        <td style="text-align:center;">${_qEsc(String(line.moq || 1))}</td>
+                        <td>${_qEsc(line.supplier_lead_time || '14 days')}</td>
+                        <td>${_qEsc(line.notes || '-')}</td>
+                    </tr>`;
+                }).join('');
+            }
+            const expireDate = quote.expire_date ? new Date(quote.expire_date) : null;
+            const isExpired = expireDate && expireDate < new Date();
+            const statusBadge = isExpired
+                ? '<span style="padding:4px 10px; background:#fee2e2; color:#dc2626; border-radius:6px; font-size:12px; font-weight:600;">Expired</span>'
+                : '<span style="padding:4px 10px; background:#d1fae5; color:#059669; border-radius:6px; font-size:12px; font-weight:600;">Active</span>';
+            const createDate = quote.create_date ? new Date(quote.create_date).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) : '-';
+            const expireDateStr = expireDate ? expireDate.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}) : '-';
+            const modalHtml = `<div class="rfq-modal-overlay" id="quote-detail-modal">
+                <div class="rfq-modal" style="max-width: 1200px; width: 90%;">
                     <div class="rfq-modal-header">
-                        <div class="rfq-modal-title">➕ Create New Quote</div>
-                        <button class="rfq-btn-close" onclick="document.getElementById('quote-create-modal').remove()">&times;</button>
+                        <div class="rfq-modal-title">Quote: ${_qEsc(quote.quote_number || '')}</div>
+                        <button class="rfq-btn-close" onclick="document.getElementById('quote-detail-modal').remove()">&times;</button>
                     </div>
                     <div class="rfq-modal-body" style="max-height: 70vh; overflow-y: auto;">
-                        <!-- Basic Info -->
-                        <div style="padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
-                            <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600;">Basic Information</h4>
-                            <div style="display:grid; gap:12px;">
-                                <div>
-                                    <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Supplier Name <span style="color:#dc2626;">*</span></label>
-                                    <input type="text" id="qc-supplier-name" class="inp-control" required placeholder="Enter supplier name" style="width:100%;">
-                                </div>
-                                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-                                    <div>
-                                        <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Project</label>
-                                        <select id="qc-project" class="inp-control" style="width:100%;">
-                                            <option value="">-- No Project --</option>
-                                            ${projectOptions}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Project Name (fallback)</label>
-                                        <input type="text" id="qc-project-name" class="inp-control" placeholder="Manual project name" style="width:100%;">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Received From (Contact Person)</label>
-                                    <input type="text" id="qc-received-from" class="inp-control" placeholder="Contact person" style="width:100%;">
-                                </div>
-                                <div>
-                                    <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Quote Number</label>
-                                    <input type="text" id="qc-quote-number" class="inp-control" placeholder="Auto-generated if empty" style="width:100%;">
-                                    <div style="font-size:11px; color:#64748b; margin-top:2px;">Leave empty to auto-generate: SUPPLIER_YYYYMMDD_HHMM</div>
-                                </div>
-                            </div>
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:20px;">
+                            <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Supplier</div>
+                                <div style="font-weight:600;">${_qEsc(quote.supplier_name || '-')}</div>
+                                ${quote.received_from ? `<div style="font-size:12px; color:#64748b; margin-top:2px;">Contact: ${_qEsc(quote.received_from)}</div>` : ''}</div>
+                            <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Project</div>
+                                <div style="font-weight:600;">${_qEsc(quote.project_name || '-')}</div></div>
+                            <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Status</div><div>${statusBadge}</div></div>
+                            <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Created</div><div>${createDate}</div></div>
+                            <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Expires</div>
+                                <div style="color:${isExpired ? '#dc2626' : '#059669'}; font-weight:600;">${expireDateStr}</div></div>
+                            <div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Currency</div><div>${_qEsc(quote.currency || 'EUR')}</div></div>
+                            ${quote.incoterm ? `<div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Incoterm</div><div>${_qEsc(quote.incoterm)}</div></div>` : ''}
+                            ${quote.payment_terms ? `<div><div style="font-size:11px; color:#64748b; margin-bottom:4px;">Payment Terms</div><div>${_qEsc(quote.payment_terms)}</div></div>` : ''}
                         </div>
-    
-                        <!-- Dates & Currency -->
-                        <div style="padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
-                            <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600;">Dates & Currency</h4>
-                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
-                                <div>
-                                    <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Expire Date <span style="color:#dc2626;">*</span></label>
-                                    <input type="date" id="qc-expire-date" class="inp-control" required style="width:100%;">
-                                </div>
-                                <div>
-                                    <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Expire Preset</label>
-                                    <select id="qc-expire-preset" class="inp-control" style="width:100%;">
-                                        <option value="">-- Manual Date --</option>
-                                        <option value="30">30 days</option>
-                                        <option value="60">60 days</option>
-                                        <option value="90">90 days</option>
-                                        <option value="120">120 days</option>
-                                        <option value="360">360 days</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Currency</label>
-                                    <select id="qc-currency" class="inp-control" style="width:100%;">
-                                        <option value="EUR">EUR</option>
-                                        <option value="USD">USD</option>
-                                        <option value="CZK">CZK</option>
-                                        <option value="GBP">GBP</option>
-                                        <option value="PLN">PLN</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-    
-                        <!-- Terms & Costs (Collapsible) -->
-                        <details style="margin-bottom:16px;">
-                            <summary style="padding:12px; background:#f1f5f9; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">Terms & Costs (Optional)</summary>
-                            <div style="padding:16px; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 6px 6px;">
-                                <div style="display:grid; gap:12px;">
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-                                        <div>
-                                            <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Incoterm</label>
-                                            <input type="text" id="qc-incoterm" class="inp-control" placeholder="e.g. EXW, FOB, DDP" style="width:100%;">
-                                        </div>
-                                        <div>
-                                            <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Payment Terms</label>
-                                            <input type="text" id="qc-payment-terms" class="inp-control" placeholder="e.g. Net 30" style="width:100%;">
-                                        </div>
-                                    </div>
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
-                                        <div>
-                                            <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Shipping Cost</label>
-                                            <input type="number" id="qc-shipping-cost" class="inp-control" placeholder="0.00" step="0.01" min="0" style="width:100%;">
-                                        </div>
-                                        <div>
-                                            <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">MOV (Min Order Value)</label>
-                                            <input type="number" id="qc-mov" class="inp-control" placeholder="0.00" step="0.01" min="0" style="width:100%;">
-                                        </div>
-                                        <div>
-                                            <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Extra Charge</label>
-                                            <input type="number" id="qc-extra-charge" class="inp-control" placeholder="0.00" step="0.01" min="0" style="width:100%;">
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Packaging</label>
-                                        <input type="text" id="qc-packaging" class="inp-control" placeholder="Packaging details" style="width:100%;">
-                                    </div>
-                                </div>
-                            </div>
-                        </details>
-    
-                        <!-- Items -->
-                        <div style="padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                                <h4 style="margin:0; font-size:14px; font-weight:600;">Items / Lines</h4>
-                                <button type="button" class="rfq-btn-secondary" onclick="addQuoteLineRow()" style="padding:4px 12px; font-size:12px;">➕ Add Line</button>
-                            </div>
-                            <div style="max-height:300px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;">
-                                <table id="qc-lines-table" class="rfq-table" style="font-size:12px;">
-                                    <thead>
-                                        <tr>
-                                            <th style="min-width:120px;">Drawing No</th>
-                                            <th style="min-width:100px;">Manufacturer</th>
-                                            <th style="min-width:100px;">MPN</th>
-                                            <th style="min-width:80px;">QTY</th>
-                                            <th style="min-width:80px;">Price</th>
-                                            <th style="min-width:60px;">MOQ</th>
-                                            <th style="min-width:100px;">Lead Time</th>
-                                            <th style="width:40px;"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="qc-lines-tbody">
-                                        <!-- Lines will be added here -->
-                                    </tbody>
+                        <div style="margin-bottom:16px;">
+                            <h4 style="margin:0 0 12px 0; font-size:14px;">Items (${lines.length})</h4>
+                            <div class="table-wrapper" style="max-height:400px; overflow-y:auto;">
+                                <table class="rfq-table">
+                                    <thead><tr><th>Drawing No</th><th>Manufacturer</th><th>MPN</th><th>Description</th><th>Price Tiers</th><th>MOQ</th><th>Lead Time</th><th>Notes</th></tr></thead>
+                                    <tbody>${linesHtml}</tbody>
                                 </table>
                             </div>
                         </div>
-    
-                        <!-- Notes & Attachment -->
-                        <details style="margin-bottom:16px;">
-                            <summary style="padding:12px; background:#f1f5f9; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">Notes & Attachment (Optional)</summary>
-                            <div style="padding:16px; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 6px 6px;">
-                                <div style="display:grid; gap:12px;">
-                                    <div>
-                                        <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Notes</label>
-                                        <textarea id="qc-notes" class="inp-control" rows="3" placeholder="Additional notes" style="width:100%;"></textarea>
-                                    </div>
-                                    <div>
-                                        <label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Attachment</label>
-                                        <input type="file" id="qc-attachment" class="inp-control" style="width:100%;">
-                                        <div style="font-size:11px; color:#64748b; margin-top:2px;">Max 10MB, PDF/Excel/Images only</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </details>
+                        ${quote.notes ? `<div style="padding:12px; background:#fffbeb; border-left:3px solid #f59e0b; border-radius:0 6px 6px 0; margin-top:16px;">
+                            <div style="font-size:11px; color:#92400e; margin-bottom:6px; font-weight:600;">Notes:</div>
+                            <div style="font-size:13px; color:#78350f; white-space:pre-wrap;">${_qEsc(quote.notes)}</div></div>` : ''}
+                        <div style="margin-top:16px; padding-top:12px; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8;">
+                            Source: ${_qEsc(quote.source || 'manual')}${quote.created_by ? ` \u2022 Created by: ${_qEsc(quote.created_by)}` : ''}</div>
                     </div>
                     <div class="rfq-modal-footer">
-                        <div style="font-size:11px; color:#64748b; flex:1;">
-                            <a href="/admin/rfq/quote/add/" target="_blank" style="color:#3b82f6; text-decoration:underline;">Open in Admin (fallback)</a>
-                        </div>
-                        <button class="rfq-btn-secondary" onclick="document.getElementById('quote-create-modal').remove()">Cancel</button>
-                        <button class="rfq-btn-primary" onclick="saveNewQuote()">💾 Save Quote</button>
+                        <button class="rfq-btn-secondary" onclick="document.getElementById('quote-detail-modal').remove()">Close</button>
+                        <button class="rfq-btn-primary" onclick="document.getElementById('quote-detail-modal').remove(); window.showQuoteEditModal('${_qEsc(quoteId)}')">Edit</button>
                     </div>
                 </div>
             </div>`;
-    
             document.body.insertAdjacentHTML('beforeend', modalHtml);
-            const modal = document.getElementById('quote-create-modal');
+            const modal = document.getElementById('quote-detail-modal');
             if (modal) modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    
-            // Expire preset change handler
-            const presetSelect = document.getElementById('qc-expire-preset');
-            const expireDateInput = document.getElementById('qc-expire-date');
-            if (presetSelect && expireDateInput) {
-                presetSelect.onchange = function() {
-                    const days = parseInt(this.value);
-                    if (days > 0) {
-                        const date = new Date();
-                        date.setDate(date.getDate() + days);
-                        expireDateInput.value = date.toISOString().split('T')[0];
-                    }
-                };
-            }
-    
-            // Add one initial empty row
-            addQuoteLineRow();
-        }
-    
-        window.addQuoteLineRow = function() {
-            const tbody = document.getElementById('qc-lines-tbody');
-            if (!tbody) return;
-    
-            const rowId = 'qc-line-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            const row = document.createElement('tr');
-            row.id = rowId;
-            row.innerHTML = `
-                <td><input type="text" class="inp-control qc-line-drawing" placeholder="Drawing" style="width:100%;"></td>
-                <td><input type="text" class="inp-control qc-line-manufacturer" placeholder="Mfr" style="width:100%;"></td>
-                <td><input type="text" class="inp-control qc-line-mpn" placeholder="MPN" style="width:100%;"></td>
-                <td><input type="text" class="inp-control qc-line-qty1" placeholder="100" style="width:100%;"></td>
-                <td><input type="number" class="inp-control qc-line-price1" placeholder="0.00" step="0.0001" min="0" style="width:100%;"></td>
-                <td><input type="number" class="inp-control qc-line-moq" placeholder="1" min="1" style="width:100%;"></td>
-                <td><input type="text" class="inp-control qc-line-lead" placeholder="14 days" style="width:100%;"></td>
-                <td><button type="button" class="rfq-btn-danger" onclick="document.getElementById('${rowId}').remove()" style="padding:2px 8px; font-size:11px;">✕</button></td>
-            `;
-            tbody.appendChild(row);
-        };
-    
-        window.saveNewQuote = function() {
-            const supplierName = document.getElementById('qc-supplier-name')?.value.trim();
-            const expireDate = document.getElementById('qc-expire-date')?.value;
-    
-            if (!supplierName) {
-                window.showAlert('Supplier Name is required');
-                return;
-            }
-            if (!expireDate) {
-                window.showAlert('Expire Date is required');
-                return;
-            }
-    
-            // Collect quote data
-            const quoteData = {
-                supplier_name: supplierName,
-                project_id: document.getElementById('qc-project')?.value || '',
-                project_name: document.getElementById('qc-project-name')?.value.trim() || '',
-                received_from: document.getElementById('qc-received-from')?.value.trim() || '',
-                quote_number: document.getElementById('qc-quote-number')?.value.trim() || '',
-                expire_date: expireDate,
-                currency: document.getElementById('qc-currency')?.value || 'EUR',
-                incoterm: document.getElementById('qc-incoterm')?.value.trim() || '',
-                payment_terms: document.getElementById('qc-payment-terms')?.value.trim() || '',
-                shipping_cost: parseFloat(document.getElementById('qc-shipping-cost')?.value) || null,
-                mov: parseFloat(document.getElementById('qc-mov')?.value) || null,
-                extra_charge: parseFloat(document.getElementById('qc-extra-charge')?.value) || null,
-                packaging: document.getElementById('qc-packaging')?.value.trim() || '',
-                notes: document.getElementById('qc-notes')?.value.trim() || '',
-                source: 'manual',
-                lines: []
-            };
-    
-            // Collect lines
-            const rows = document.querySelectorAll('#qc-lines-tbody tr');
-            rows.forEach(row => {
-                const drawing = row.querySelector('.qc-line-drawing')?.value.trim();
-                const manufacturer = row.querySelector('.qc-line-manufacturer')?.value.trim();
-                const mpn = row.querySelector('.qc-line-mpn')?.value.trim();
-                const qty1 = row.querySelector('.qc-line-qty1')?.value.trim();
-                const price1 = parseFloat(row.querySelector('.qc-line-price1')?.value);
-                const moq = parseInt(row.querySelector('.qc-line-moq')?.value) || 1;
-                const lead = row.querySelector('.qc-line-lead')?.value.trim() || '14 days';
-    
-                // Only add line if at least drawing or MPN is provided
-                if (drawing || mpn) {
-                    quoteData.lines.push({
-                        drawing_number: drawing,
-                        manufacturer: manufacturer,
-                        mpn: mpn,
-                        qty_1: qty1,
-                        price_1: isNaN(price1) ? null : price1,
-                        moq: moq,
-                        supplier_lead_time: lead
-                    });
-                }
-            });
-    
-            // Show loading
-            const saveBtn = event.target;
-            const originalText = saveBtn.textContent;
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-    
-            // POST to API
-            _fetchJson('/rfq/api/quotes/create/', {
-                method: 'POST',
-                body: JSON.stringify(quoteData)
-            })
-            .then(res => {
-                if (res && res.ok) {
-                    window.showAlert('Quote created successfully!');
-                    document.getElementById('quote-create-modal')?.remove();
-                    renderQuotes(); // Refresh list
-                } else {
-                    window.showAlert('Failed to create quote: ' + (res.error || 'Unknown error'));
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = originalText;
-                }
-            })
-            .catch(err => {
-                console.error('Error creating quote:', err);
-                window.showAlert('Error creating quote: ' + (err.message || 'Unknown error'));
-                saveBtn.disabled = false;
-                saveBtn.textContent = originalText;
-            });
-        };
-    
-        function deleteQuote(quoteId) {
-            if (!quoteId) return;
-            window.showConfirm('Are you sure you want to delete this quote?', (confirmed) => {
-                if (!confirmed) return;
-                const url = `/rfq/api/quotes/${quoteId}/delete/`;
-                _fetchJson(url, { method: 'DELETE' })
-                    .then(res => {
-                        if (res && res.ok) {
-                            window.showAlert('Quote deleted successfully');
-                            renderQuotes();
-                        } else {
-                            window.showAlert('Failed to delete quote: ' + (res.error || 'Unknown error'));
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Delete quote error:', err);
-                        window.showAlert('Error deleting quote');
-                    });
-            });
-        }
-    
-        // Add filter event listeners
-        const quotesSearch = document.getElementById('quotes-search');
-        const quotesProjectFilter = document.getElementById('quotes-project-filter');
-        const quotesSupplierFilter = document.getElementById('quotes-supplier-filter');
-        const quotesStatusFilter = document.getElementById('quotes-status-filter');
-        const btnQuotesRefresh = document.getElementById('btn-quotes-refresh');
-        const btnQuotesClearFilters = document.getElementById('btn-quotes-clear-filters');
-        const btnQuotesCreate = document.getElementById('btn-quotes-create');
-    
-        if (quotesSearch) quotesSearch.addEventListener('input', renderQuotes);
-        if (quotesProjectFilter) quotesProjectFilter.addEventListener('change', renderQuotes);
-        if (quotesSupplierFilter) quotesSupplierFilter.addEventListener('change', renderQuotes);
-        if (quotesStatusFilter) quotesStatusFilter.addEventListener('change', renderQuotes);
-    
-        if (btnQuotesRefresh) btnQuotesRefresh.onclick = renderQuotes;
-    
-        if (btnQuotesClearFilters) btnQuotesClearFilters.onclick = () => {
-            if (quotesSearch) quotesSearch.value = '';
-            if (quotesProjectFilter) quotesProjectFilter.value = '';
-            if (quotesSupplierFilter) quotesSupplierFilter.value = '';
-            if (quotesStatusFilter) quotesStatusFilter.value = '';
-            renderQuotes();
-        };
-    
-        if (btnQuotesCreate) btnQuotesCreate.onclick = () => {
-            showQuoteCreateModal();
-        };
+        })
+        .catch(err => { console.error('Failed to load quote detail:', err); window.showAlert('Error loading quote details'); });
+};
 
-});
+/* --- Edit Modal (full inline, not admin redirect) --- */
+window.showQuoteEditModal = function(quoteId) {
+    const quote = _quotesCache.find(q => String(q.id) === String(quoteId));
+    if (!quote) { window.showAlert('Quote not found'); return; }
+    const existingModal = document.getElementById('quote-edit-modal');
+    if (existingModal) existingModal.remove();
+
+    const modalHtml = `<div id="quote-edit-modal" class="rfq-modal-overlay">
+        <div class="rfq-modal" style="max-width:900px; width:90%;">
+            <div class="rfq-modal-header">
+                <div class="rfq-modal-title">Edit Quote ${_qEsc(quote.quote_number || '')}</div>
+                <button class="rfq-btn-close" onclick="document.getElementById('quote-edit-modal').remove()">✕</button>
+            </div>
+            <div class="rfq-modal-body" style="max-height:70vh; overflow-y:auto;">
+                <div style="padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600;">Dates & Currency</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Expire Date <span style="color:#dc2626;">*</span></label>
+                            <input type="date" id="qe-expire-date" class="inp-control" style="width:100%;" value="${quote.expire_date ? quote.expire_date.split('T')[0] : ''}"></div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Currency</label>
+                            <select id="qe-currency" class="inp-control" style="width:100%;">
+                                <option value="EUR" ${quote.currency === 'EUR' ? 'selected' : ''}>EUR</option>
+                                <option value="USD" ${quote.currency === 'USD' ? 'selected' : ''}>USD</option>
+                                <option value="CZK" ${quote.currency === 'CZK' ? 'selected' : ''}>CZK</option>
+                                <option value="GBP" ${quote.currency === 'GBP' ? 'selected' : ''}>GBP</option>
+                                <option value="PLN" ${quote.currency === 'PLN' ? 'selected' : ''}>PLN</option>
+                            </select></div>
+                    </div>
+                </div>
+                <div style="padding:16px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600;">Terms & Costs</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Incoterm</label>
+                            <input type="text" id="qe-incoterm" class="inp-control" style="width:100%;" value="${_qEsc(quote.incoterm || '')}"></div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Payment Terms</label>
+                            <input type="text" id="qe-payment-terms" class="inp-control" style="width:100%;" value="${_qEsc(quote.payment_terms || '')}"></div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Shipping Cost</label>
+                            <input type="number" id="qe-shipping-cost" class="inp-control" step="0.01" min="0" style="width:100%;" value="${quote.shipping_cost || ''}"></div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">MOV</label>
+                            <input type="number" id="qe-mov" class="inp-control" step="0.01" min="0" style="width:100%;" value="${quote.mov || ''}"></div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Extra Charge</label>
+                            <input type="number" id="qe-extra-charge" class="inp-control" step="0.01" min="0" style="width:100%;" value="${quote.extra_charge || ''}"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom:16px;"><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Notes</label>
+                    <textarea id="qe-notes" class="inp-control" rows="3" style="width:100%;">${_qEsc(quote.notes || '')}</textarea></div>
+            </div>
+            <div class="rfq-modal-footer">
+                <button class="rfq-btn-secondary" onclick="document.getElementById('quote-edit-modal').remove()">Cancel</button>
+                <button class="rfq-btn-primary" onclick="window.updateQuote('${_qEsc(quote.id)}')">💾 Save Changes</button>
+            </div>
+        </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = document.getElementById('quote-edit-modal');
+    if (modal) modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+};
+
+window.updateQuote = function(quoteId) {
+    const expireDate = document.getElementById('qe-expire-date')?.value;
+    if (!expireDate) { window.showAlert('Expire Date is required'); return; }
+    const data = {
+        expire_date: expireDate,
+        currency: document.getElementById('qe-currency')?.value,
+        incoterm: document.getElementById('qe-incoterm')?.value,
+        payment_terms: document.getElementById('qe-payment-terms')?.value,
+        shipping_cost: document.getElementById('qe-shipping-cost')?.value,
+        mov: document.getElementById('qe-mov')?.value,
+        extra_charge: document.getElementById('qe-extra-charge')?.value,
+        notes: document.getElementById('qe-notes')?.value,
+    };
+    _qFetchJson(`/api/quotes/${quoteId}/update/`, { method: 'POST', body: JSON.stringify(data) })
+        .then(res => {
+            if (res.ok) {
+                window.showAlert('Quote updated successfully');
+                document.getElementById('quote-edit-modal')?.remove();
+                renderQuotes();
+            } else {
+                window.showAlert(res.error || 'Failed to update quote');
+            }
+        })
+        .catch(err => { console.error('Update error:', err); window.showAlert('Error updating quote'); });
+};
+
+/* --- Create Modal --- */
+window.showQuoteCreateModal = function() {
+    const projects = _qGetProjects();
+    const projectOptions = (projects || []).map(p => `<option value="${_qEsc(p.id)}">${_qEsc(p.name || p.id)}</option>`).join('');
+
+    const modalHtml = `<div class="rfq-modal-overlay" id="quote-create-modal">
+        <div class="rfq-modal" style="max-width: 900px; width: 90%;">
+            <div class="rfq-modal-header">
+                <div class="rfq-modal-title">➕ Create New Quote</div>
+                <button class="rfq-btn-close" onclick="document.getElementById('quote-create-modal').remove()">&times;</button>
+            </div>
+            <div class="rfq-modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div style="padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600;">Basic Information</h4>
+                    <div style="display:grid; gap:12px;">
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Supplier Name <span style="color:#dc2626;">*</span></label>
+                            <input type="text" id="qc-supplier-name" class="inp-control" required placeholder="Enter supplier name" style="width:100%;"></div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                            <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Project</label>
+                                <select id="qc-project" class="inp-control" style="width:100%;"><option value="">-- No Project --</option>${projectOptions}</select></div>
+                            <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Project Name (fallback)</label>
+                                <input type="text" id="qc-project-name" class="inp-control" placeholder="Manual project name" style="width:100%;"></div>
+                        </div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Received From (Contact Person)</label>
+                            <input type="text" id="qc-received-from" class="inp-control" placeholder="Contact person" style="width:100%;"></div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Quote Number</label>
+                            <input type="text" id="qc-quote-number" class="inp-control" placeholder="Auto-generated if empty" style="width:100%;">
+                            <div style="font-size:11px; color:#64748b; margin-top:2px;">Leave empty to auto-generate: SUPPLIER_YYYYMMDD_HHMM</div></div>
+                    </div>
+                </div>
+                <div style="padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0; font-size:14px; font-weight:600;">Dates & Currency</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Expire Date <span style="color:#dc2626;">*</span></label>
+                            <input type="date" id="qc-expire-date" class="inp-control" required style="width:100%;"></div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Expire Preset</label>
+                            <select id="qc-expire-preset" class="inp-control" style="width:100%;"><option value="">-- Manual Date --</option><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option><option value="120">120 days</option><option value="360">360 days</option></select></div>
+                        <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Currency</label>
+                            <select id="qc-currency" class="inp-control" style="width:100%;"><option value="EUR">EUR</option><option value="USD">USD</option><option value="CZK">CZK</option><option value="GBP">GBP</option><option value="PLN">PLN</option></select></div>
+                    </div>
+                </div>
+                <details style="margin-bottom:16px;">
+                    <summary style="padding:12px; background:#f1f5f9; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">Terms & Costs (Optional)</summary>
+                    <div style="padding:16px; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 6px 6px;">
+                        <div style="display:grid; gap:12px;">
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                                <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Incoterm</label><input type="text" id="qc-incoterm" class="inp-control" placeholder="e.g. EXW, FOB, DDP" style="width:100%;"></div>
+                                <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Payment Terms</label><input type="text" id="qc-payment-terms" class="inp-control" placeholder="e.g. Net 30" style="width:100%;"></div>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
+                                <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Shipping Cost</label><input type="number" id="qc-shipping-cost" class="inp-control" placeholder="0.00" step="0.01" min="0" style="width:100%;"></div>
+                                <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">MOV (Min Order Value)</label><input type="number" id="qc-mov" class="inp-control" placeholder="0.00" step="0.01" min="0" style="width:100%;"></div>
+                                <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Extra Charge</label><input type="number" id="qc-extra-charge" class="inp-control" placeholder="0.00" step="0.01" min="0" style="width:100%;"></div>
+                            </div>
+                            <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Packaging</label><input type="text" id="qc-packaging" class="inp-control" placeholder="Packaging details" style="width:100%;"></div>
+                        </div>
+                    </div>
+                </details>
+                <div style="padding:16px; background:#f8fafc; border-radius:8px; margin-bottom:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="margin:0; font-size:14px; font-weight:600;">Items / Lines</h4>
+                        <button type="button" class="rfq-btn-secondary" onclick="window.addQuoteLineRow()" style="padding:4px 12px; font-size:12px;">➕ Add Line</button>
+                    </div>
+                    <div style="max-height:300px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;">
+                        <table id="qc-lines-table" class="rfq-table" style="font-size:12px;">
+                            <thead><tr><th style="min-width:120px;">Drawing No</th><th style="min-width:100px;">Manufacturer</th><th style="min-width:100px;">MPN</th><th style="min-width:80px;">QTY</th><th style="min-width:80px;">Price</th><th style="min-width:60px;">MOQ</th><th style="min-width:100px;">Lead Time</th><th style="width:40px;"></th></tr></thead>
+                            <tbody id="qc-lines-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <details style="margin-bottom:16px;">
+                    <summary style="padding:12px; background:#f1f5f9; border-radius:6px; cursor:pointer; font-size:14px; font-weight:600;">Notes & Attachment (Optional)</summary>
+                    <div style="padding:16px; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 6px 6px;">
+                        <div style="display:grid; gap:12px;">
+                            <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Notes</label><textarea id="qc-notes" class="inp-control" rows="3" placeholder="Additional notes" style="width:100%;"></textarea></div>
+                            <div><label style="display:block; font-size:12px; color:#64748b; margin-bottom:4px;">Attachment</label><input type="file" id="qc-attachment" class="inp-control" style="width:100%;"><div style="font-size:11px; color:#64748b; margin-top:2px;">Max 10MB, PDF/Excel/Images only</div></div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            <div class="rfq-modal-footer">
+                <div style="font-size:11px; color:#64748b; flex:1;"><a href="/admin/rfq/quote/add/" target="_blank" style="color:#3b82f6; text-decoration:underline;">Open in Admin (fallback)</a></div>
+                <button class="rfq-btn-secondary" onclick="document.getElementById('quote-create-modal').remove()">Cancel</button>
+                <button class="rfq-btn-primary" onclick="window.saveNewQuote()">💾 Save Quote</button>
+            </div>
+        </div>
+    </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = document.getElementById('quote-create-modal');
+    if (modal) modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+    const presetSelect = document.getElementById('qc-expire-preset');
+    const expireDateInput = document.getElementById('qc-expire-date');
+    if (presetSelect && expireDateInput) {
+        presetSelect.onchange = function() {
+            const days = parseInt(this.value);
+            if (days > 0) {
+                const date = new Date();
+                date.setDate(date.getDate() + days);
+                expireDateInput.value = date.toISOString().split('T')[0];
+            }
+        };
+    }
+
+    window.addQuoteLineRow();
+};
+
+window.addQuoteLineRow = function() {
+    const tbody = document.getElementById('qc-lines-tbody');
+    if (!tbody) return;
+    const rowId = 'qc-line-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    const row = document.createElement('tr');
+    row.id = rowId;
+    row.innerHTML = `
+        <td><input type="text" class="inp-control qc-line-drawing" placeholder="Drawing" style="width:100%;"></td>
+        <td><input type="text" class="inp-control qc-line-manufacturer" placeholder="Mfr" style="width:100%;"></td>
+        <td><input type="text" class="inp-control qc-line-mpn" placeholder="MPN" style="width:100%;"></td>
+        <td><input type="text" class="inp-control qc-line-qty1" placeholder="100" style="width:100%;"></td>
+        <td><input type="number" class="inp-control qc-line-price1" placeholder="0.00" step="0.0001" min="0" style="width:100%;"></td>
+        <td><input type="number" class="inp-control qc-line-moq" placeholder="1" min="1" style="width:100%;"></td>
+        <td><input type="text" class="inp-control qc-line-lead" placeholder="14 days" style="width:100%;"></td>
+        <td><button type="button" class="rfq-btn-danger" onclick="document.getElementById('${rowId}').remove()" style="padding:2px 8px; font-size:11px;">✕</button></td>`;
+    tbody.appendChild(row);
+};
+
+window.saveNewQuote = function() {
+    const supplierName = document.getElementById('qc-supplier-name')?.value.trim();
+    const expireDate = document.getElementById('qc-expire-date')?.value;
+    if (!supplierName) { window.showAlert('Supplier Name is required'); return; }
+    if (!expireDate) { window.showAlert('Expire Date is required'); return; }
+
+    const quoteData = {
+        supplier_name: supplierName,
+        project_id: document.getElementById('qc-project')?.value || '',
+        project_name: document.getElementById('qc-project-name')?.value.trim() || '',
+        received_from: document.getElementById('qc-received-from')?.value.trim() || '',
+        quote_number: document.getElementById('qc-quote-number')?.value.trim() || '',
+        expire_date: expireDate,
+        currency: document.getElementById('qc-currency')?.value || 'EUR',
+        incoterm: document.getElementById('qc-incoterm')?.value.trim() || '',
+        payment_terms: document.getElementById('qc-payment-terms')?.value.trim() || '',
+        shipping_cost: parseFloat(document.getElementById('qc-shipping-cost')?.value) || null,
+        mov: parseFloat(document.getElementById('qc-mov')?.value) || null,
+        extra_charge: parseFloat(document.getElementById('qc-extra-charge')?.value) || null,
+        packaging: document.getElementById('qc-packaging')?.value.trim() || '',
+        notes: document.getElementById('qc-notes')?.value.trim() || '',
+        source: 'manual',
+        lines: []
+    };
+
+    document.querySelectorAll('#qc-lines-tbody tr').forEach(row => {
+        const drawing = row.querySelector('.qc-line-drawing')?.value.trim();
+        const mpn = row.querySelector('.qc-line-mpn')?.value.trim();
+        if (drawing || mpn) {
+            quoteData.lines.push({
+                drawing_number: drawing,
+                manufacturer: row.querySelector('.qc-line-manufacturer')?.value.trim(),
+                mpn: mpn,
+                qty_1: row.querySelector('.qc-line-qty1')?.value.trim(),
+                price_1: parseFloat(row.querySelector('.qc-line-price1')?.value) || null,
+                moq: parseInt(row.querySelector('.qc-line-moq')?.value) || 1,
+                supplier_lead_time: row.querySelector('.qc-line-lead')?.value.trim() || '14 days'
+            });
+        }
+    });
+
+    const saveBtn = document.querySelector('#quote-create-modal .rfq-btn-primary');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+    _qFetchJson('/api/quotes/create/', { method: 'POST', body: JSON.stringify(quoteData) })
+        .then(res => {
+            if (res && res.ok) {
+                window.showAlert('Quote created successfully!');
+                document.getElementById('quote-create-modal')?.remove();
+                renderQuotes();
+            } else {
+                window.showAlert('Failed to create quote: ' + (res.error || 'Unknown error'));
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Save Quote'; }
+            }
+        })
+        .catch(err => {
+            console.error('Error creating quote:', err);
+            window.showAlert('Error creating quote: ' + (err.message || 'Unknown error'));
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Save Quote'; }
+        });
+};
+
+window.deleteQuote = function(quoteId) {
+    if (!quoteId) return;
+    window.showConfirm('Are you sure you want to delete this quote?', (confirmed) => {
+        if (!confirmed) return;
+        _qFetchJson(`/api/quotes/${quoteId}/delete/`, { method: 'DELETE' })
+            .then(res => {
+                if (res && res.ok) { window.showAlert('Quote deleted successfully'); renderQuotes(); }
+                else { window.showAlert('Failed to delete quote: ' + (res.error || 'Unknown error')); }
+            })
+            .catch(err => { console.error('Delete quote error:', err); window.showAlert('Error deleting quote'); });
+    });
+};
+
+/* --- Export / Import helpers --- */
+window.exportQuoteLineToItem = function(projectId, lineId, quoteNumber) {
+    if (!projectId || projectId === 'null' || projectId === 'undefined') {
+        window.showAlert('Quote not linked to a project.');
+        return;
+    }
+    window.showConfirm('Update Project Item with pricing from Quote ' + quoteNumber + '?', (confirmed) => {
+        if (!confirmed) return;
+        _qFetchJson('/api/quotes/export_to_item/', { method: 'POST', body: JSON.stringify({ project_id: projectId, line_id: lineId }) })
+            .then(res => {
+                if (res.ok) {
+                    window.showAlert('Item updated successfully!');
+                    // Refresh project data so RFQ Planner reflects updated prices
+                    if (window.RFQData && window.RFQData.loadProjects) window.RFQData.loadProjects();
+                }
+                else window.showAlert('Error: ' + (res.error || 'Unknown error'));
+            })
+            .catch(err => { console.error(err); window.showAlert('Request failed'); });
+    });
+};
+
+window.saveItemToQuote = function(projectId, itemId, supplierName) {
+    if (!projectId || !itemId || !supplierName) { window.showAlert('Missing data for quote creation.'); return; }
+    window.showConfirm(`Create/Update Quote for ${supplierName}?`, (confirmed) => {
+        if (!confirmed) return;
+        _qFetchJson('/api/quotes/create_from_item/', { method: 'POST', body: JSON.stringify({ project_id: projectId, item_id: itemId, supplier_name: supplierName }) })
+            .then(res => {
+                if (res.ok) window.showAlert('Quote saved successfully!');
+                else window.showAlert('Error: ' + (res.error || 'Unknown error'));
+            })
+            .catch(err => { console.error(err); window.showAlert('Request failed'); });
+    });
+};
+
+/* --- Event listeners --- */
+const quotesSearch = document.getElementById('quotes-search');
+const quotesProjectFilter = document.getElementById('quotes-project-filter');
+const quotesSupplierFilter = document.getElementById('quotes-supplier-filter');
+const quotesNumberFilter = document.getElementById('quotes-number-filter');
+const quotesStatusFilter = document.getElementById('quotes-status-filter');
+const btnQuotesRefresh = document.getElementById('btn-quotes-refresh');
+const btnQuotesClearFilters = document.getElementById('btn-quotes-clear-filters');
+const btnQuotesCreate = document.getElementById('btn-quotes-create');
+const btnQuotesBcHome = document.getElementById('quotes-bc-home');
+
+if (quotesSearch) quotesSearch.addEventListener('input', renderQuotes);
+if (quotesProjectFilter) quotesProjectFilter.addEventListener('change', renderQuotes);
+if (quotesSupplierFilter) quotesSupplierFilter.addEventListener('change', renderQuotes);
+if (quotesNumberFilter) quotesNumberFilter.addEventListener('input', renderQuotes);
+if (quotesStatusFilter) quotesStatusFilter.addEventListener('change', renderQuotes);
+if (btnQuotesRefresh) btnQuotesRefresh.onclick = renderQuotes;
+
+if (btnQuotesClearFilters) btnQuotesClearFilters.onclick = () => {
+    if (quotesSearch) quotesSearch.value = '';
+    if (quotesProjectFilter) quotesProjectFilter.value = '';
+    if (quotesSupplierFilter) quotesSupplierFilter.value = '';
+    if (quotesNumberFilter) quotesNumberFilter.value = '';
+    if (quotesStatusFilter) quotesStatusFilter.value = '';
+    renderQuotes();
+};
+
+if (btnQuotesCreate) btnQuotesCreate.onclick = () => { window.showQuoteCreateModal(); };
+
+if (btnQuotesBcHome) btnQuotesBcHome.onclick = () => {
+    if (_quotesLevel === 3 && _quotesSupplier) _renderQuotesLevel2(_quotesSupplier);
+    else _renderQuotesLevel1();
+};
+
+const btnQuotesBcSupplier = document.getElementById('quotes-bc-supplier');
+if (btnQuotesBcSupplier) btnQuotesBcSupplier.onclick = () => {
+    if (_quotesSupplier) _renderQuotesLevel2(_quotesSupplier);
+};
 

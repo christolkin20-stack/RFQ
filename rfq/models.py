@@ -245,6 +245,7 @@ class Quote(models.Model):
         ('supplier_portal', 'Supplier Portal'),
         ('email', 'Email'),
         ('import', 'Import'),
+        ('rfq_planner', 'RFQ Planner'),
     ]
     source = models.CharField(max_length=32, choices=SOURCE_CHOICES, default='manual')
     source_id = models.CharField(max_length=64, blank=True, default='', help_text='SupplierAccess ID pokud ze Supplier Portalu')
