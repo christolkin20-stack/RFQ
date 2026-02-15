@@ -8,6 +8,7 @@
     body{font-family:Inter,system-ui,Arial;margin:0;background:#0b1020;color:#e5e7eb}
     .wrap{max-width:1280px;margin:0 auto;padding:18px}
     .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+    .navmeta{display:flex;align-items:center;gap:10px;font-size:12px;color:#cbd5e1}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .card{background:#121a31;border:1px solid #243056;border-radius:12px;padding:12px}
     .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
@@ -37,8 +38,12 @@
         <div class="muted">Interní administrace pro zaměstnance — firmy, uživatelé, locky, audit</div>
       </div>
       <div class="controls">
+        <div class="navmeta">
+          <span id="mega-clock"></span>
+          <span>👤 {{ request.user.username }}</span>
+        </div>
         <a href="/"><button>RFQ App</button></a>
-        <a href="/admin/logout/"><button>Logout</button></a>
+        <a href="/admin/logout/?next=/admin/login/"><button>Logout</button></a>
       </div>
     </div>
 
@@ -260,6 +265,15 @@ document.getElementById('ucreate').onclick=async()=>{
   toast('User created');
   await loadUsers();
 };
+
+function updateMegaClock(){
+  const d = new Date();
+  const txt = d.toLocaleDateString('cs-CZ', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric' }) + ' • ' + d.toLocaleTimeString('cs-CZ', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const el = document.getElementById('mega-clock');
+  if (el) el.textContent = txt;
+}
+updateMegaClock();
+setInterval(updateMegaClock, 1000);
 
 Promise.all([loadCompanies(), loadUsers(), loadLocks(), loadAudit()]).catch(e=>toast('Admin load failed: '+e.message,false));
 </script>

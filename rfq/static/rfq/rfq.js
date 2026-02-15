@@ -17,6 +17,9 @@ window.SystemApps.rfq = {
                     <div class="rfq-brand">⚡ OptiChain RFQ</div>
                     <div class="rfq-topbar-spacer"></div>
                     <div id="topbar-datetime" style="margin-right:12px; font-size:13px; white-space:nowrap; color: rgba(255,255,255,0.7); font-weight: 500;"></div>
+                    <div id="topbar-user" style="margin-right:10px; font-size:12px; color: rgba(255,255,255,0.92);"></div>
+                    <a id="topbar-mega-link" href="/mega-admin/" style="display:none; margin-right:8px; color:#bfdbfe; font-size:12px; text-decoration:none;">Mega Admin</a>
+                    <a href="/admin/logout/?next=/admin/login/" style="color:#fecaca; font-size:12px; text-decoration:none;">Logout</a>
                 </div>
 
 
@@ -9473,6 +9476,7 @@ window.SystemApps.rfq = {
             generateManualEntryForm();
             updateMenuTime();
             setInterval(updateMenuTime, 1000);
+            loadSessionInfo();
 
             // Initialize dashboard layout system
             try { initDashboardLayout(); } catch (e) { console.warn('Dashboard layout init:', e); }
@@ -18188,6 +18192,24 @@ Best regards`)}</textarea>
 
             const top = document.getElementById('topbar-datetime');
             if (top) top.textContent = txt;
+        }
+
+        async function loadSessionInfo() {
+            try {
+                const res = await fetch('/api/session/me', { credentials: 'same-origin' });
+                if (!res.ok) return;
+                const data = await res.json();
+                const topUser = document.getElementById('topbar-user');
+                if (topUser && data) {
+                    const role = data.role ? ` (${data.role})` : '';
+                    const company = data.company_name ? ` • ${data.company_name}` : '';
+                    topUser.textContent = `👤 ${data.username || 'user'}${role}${company}`;
+                }
+                const mega = document.getElementById('topbar-mega-link');
+                if (mega && (data.is_superadmin || data.is_management)) {
+                    mega.style.display = 'inline';
+                }
+            } catch (e) { }
         }
 
         function renderSuppliers() {

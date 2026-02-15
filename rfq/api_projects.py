@@ -148,6 +148,23 @@ def health(request):
     return JsonResponse({'ok': True})
 
 
+def session_me(request):
+    actor, auth_err = require_auth_and_profile(request)
+    if auth_err:
+        return auth_err
+    company = actor.get('company')
+    return JsonResponse({
+        'ok': True,
+        'user_id': actor.get('user_id'),
+        'username': actor.get('username'),
+        'role': actor.get('role'),
+        'is_management': bool(actor.get('is_management')),
+        'is_superadmin': bool(actor.get('is_superadmin')),
+        'company_id': getattr(company, 'id', None),
+        'company_name': getattr(company, 'name', ''),
+    })
+
+
 @csrf_exempt
 def projects_collection(request):
     actor, auth_err = require_auth_and_profile(request)
