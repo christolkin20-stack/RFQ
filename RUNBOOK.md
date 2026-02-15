@@ -30,6 +30,15 @@ python manage.py runserver 0.0.0.0:8780
 - `GET /api/health` => `{ok:true}`
 - With `DJANGO_DEBUG=0`, buyer API without auth should return `401`
 
-## 6) Notes
+## 6) Pre-release preflight (recommended)
+```bash
+./scripts/preflight.sh
+```
+This runs:
+- `manage.py check`
+- RFQ API/auth/supplier tests
+- a production-mode auth guard sanity test (`DJANGO_DEBUG=0`)
+
+## 7) Notes
 - Large artifacts are moved to `../_artifacts/` and should not be versioned.
 - Do not commit `.venv`, `db.sqlite3`, `media/`, `staticfiles/`.
