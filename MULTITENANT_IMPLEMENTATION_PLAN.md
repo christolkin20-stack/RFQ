@@ -2,7 +2,7 @@
 
 ## RFQ Enterprise Upgrade Blueprint
 
-Status: **In Progress (implementation running)**  
+Status: **Completed (core scope delivered)**  
 Date: 2026-02-15  
 Scope owner: RFQ app (Django + JS)
 
@@ -13,14 +13,13 @@ Scope owner: RFQ app (Django + JS)
 - ✅ PR3: Quotes + buyer Supplier API company scoping
 - ✅ PR4: Project visibility ACL enforcement + `project access` API
 - ✅ PR5: Lock API (acquire/heartbeat/release/status/force unlock)
-- ✅ RC tests currently green (`supplier_flow`, `quote_roundtrip`, `rc1_dryrun`)
 - ✅ Lock UI integration implemented (item-detail + key edit views)
-- ✅ Admin API + basic admin UI panels implemented (users/companies/audit logs)
-- ✅ Broader audit coverage started (locks, ACL updates, quote mutations, supplier decisions)
-- ✅ Admin UX improved (role/company/mgmt + audit + lock monitor)
-- ✅ Additional ACL edge hardening for quote project bindings/import paths
+- ✅ Admin API + admin UI panels implemented (users/companies/audit logs/locks)
+- ✅ Audit coverage implemented (locks, ACL updates, quote mutations, supplier decisions)
+- ✅ ACL hardening pass completed for quote project binding/import paths
 - ✅ Non-null company hardening migration implemented (`0009_enforce_company_not_null`)
-- 🔄 Next: final completion checklist + optional UI polish pass
+- ✅ Regression tests green (`supplier_flow`, `quote_roundtrip`, `rc1_dryrun`)
+- ℹ️ Remaining is optional polish only (UI ergonomics + extra tests)
 
 ---
 
@@ -328,3 +327,18 @@ Rollback approach:
 - Admin/SuperAdmin UIs functional
 - Audit trail queryable and complete for key mutations
 - Existing live RFQ workflows remain stable
+
+## 13) Completion Review (2026-02-15)
+
+Status against DoD:
+- ✅ Tenant isolation implemented in projects/quotes/buyer supplier APIs
+- ✅ Role + ACL checks implemented and enforced
+- ✅ Lock API + lock UI read-only fallback delivered
+- ✅ Admin/SuperAdmin management endpoints + settings UI delivered
+- ✅ Audit logs available + admin audit viewer + lock monitor delivered
+- ✅ Regression tests pass after hardening migration
+
+Optional follow-up (not blocking completion):
+- UI polish for admin controls (bulk actions, clearer confirmation flows)
+- Additional dedicated ACL/unit tests for admin edge paths
+- Future roadmap items remain deferred (SSO, server-first sync, Supabase migration)
