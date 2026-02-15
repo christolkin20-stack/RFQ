@@ -236,9 +236,11 @@ def projects_collection(request):
         pid = str(proj.get('id') or uuid.uuid4().hex)
         name = str(proj.get('name') or 'Untitled')[:255]
         with transaction.atomic():
-            obj, _created = _projects_qs_for_actor(actor).select_for_update().get_or_create(id=pid, defaults={'name': name, 'data': proj, 'company': actor.get('company')})
-            if not obj.company_id and actor and actor.get('company'):
-                obj.company = actor.get('company')
+            obj = Project.objects.select_for_update().filter(id=pid).first()
+            if not obj:
+                obj = Project(id=pid, name=name, data=proj, company=actor.get('scope_company') or actor.get('company'))
+            if not obj.company_id and (actor.get('scope_company') or actor.get('company')):
+                obj.company = actor.get('scope_company') or actor.get('company')
             elif obj.company_id and not can_edit_project(actor, obj):
                 return JsonResponse({'error': 'Access denied'}, status=403)
             obj.name = name
@@ -281,9 +283,11 @@ def project_detail(request, project_id: str):
         proj = payload
         name = str(proj.get('name') or 'Untitled')[:255]
         with transaction.atomic():
-            obj, _created = _projects_qs_for_actor(actor).select_for_update().get_or_create(id=pid, defaults={'name': name, 'data': proj, 'company': actor.get('company')})
-            if not obj.company_id and actor and actor.get('company'):
-                obj.company = actor.get('company')
+            obj = Project.objects.select_for_update().filter(id=pid).first()
+            if not obj:
+                obj = Project(id=pid, name=name, data=proj, company=actor.get('scope_company') or actor.get('company'))
+            if not obj.company_id and (actor.get('scope_company') or actor.get('company')):
+                obj.company = actor.get('scope_company') or actor.get('company')
             elif obj.company_id and not can_edit_project(actor, obj):
                 return JsonResponse({'error': 'Access denied'}, status=403)
             obj.name = name
@@ -337,6 +341,7 @@ def projects_bulk(request):
     deleted = 0
     incoming_ids = set()
 
+    skipped = 0
     with transaction.atomic():
         for proj in projects:
             if not isinstance(proj, dict):
@@ -344,11 +349,23 @@ def projects_bulk(request):
             pid = str(proj.get('id') or uuid.uuid4().hex)
             incoming_ids.add(pid)
             name = str(proj.get('name') or 'Untitled')[:255]
-            obj, _created = _projects_qs_for_actor(actor).select_for_update().get_or_create(id=pid, defaults={'name': name, 'data': proj, 'company': actor.get('company')})
-            if not obj.company_id and actor and actor.get('company'):
-                obj.company = actor.get('company')
-            elif obj.company_id and not can_edit_project(actor, obj):
-                return JsonResponse({'error': 'Access denied'}, status=403)
+
+            # Resolve globally first (important for superadmin scoped mode)
+            obj = Project.objects.select_for_update().filter(id=pid).first()
+            if obj:
+                if not can_edit_project(actor, obj):
+                    skipped += 1
+                    continue
+            else:
+                obj = Project(id=pid, name=name, data=proj, company=actor.get('scope_company') or actor.get('company'))
+
+            if not obj.company_id and (actor.get('scope_company') or actor.get('company')):
+                obj.company = actor.get('scope_company') or actor.get('company')
+
+            if obj.company_id and not can_edit_project(actor, obj):
+                skipped += 1
+                continue
+
             obj.name = name
             obj.data = _merge_preserve_supplier_quotes(obj.data or {}, proj)
             obj.save()
@@ -359,8 +376,8 @@ def projects_bulk(request):
         if ids_to_delete:
             deleted = _projects_qs_for_actor(actor).filter(id__in=ids_to_delete).delete()[0]
 
-    audit_log(request, actor, action='project.bulk_sync', entity_type='project', entity_id='bulk', metadata={'upserted': upserted, 'deleted': deleted})
-    return JsonResponse({'ok': True, 'upserted': upserted, 'deleted': deleted})
+    audit_log(request, actor, action='project.bulk_sync', entity_type='project', entity_id='bulk', metadata={'upserted': upserted, 'deleted': deleted, 'skipped': skipped})
+    return JsonResponse({'ok': True, 'upserted': upserted, 'deleted': deleted, 'skipped': skipped})
 
 
 @csrf_exempt
