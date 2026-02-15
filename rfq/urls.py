@@ -7,6 +7,7 @@ from . import api_quotes
 urlpatterns = [
     path('', views.app, name='rfq_app'),
     path('bundle/<str:bundle_id>/', views.app, name='rfq_bundle_app'),
+    path('mega-admin/', views.mega_admin_dashboard, name='rfq_mega_admin'),
 
     # API
     path('api/health', api_projects.health, name='api_health'),

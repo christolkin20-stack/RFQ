@@ -9,6 +9,13 @@ def get_default_company_id():
 
 class Company(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    vat_number = models.CharField(max_length=64, blank=True, default='')
+    registration_number = models.CharField(max_length=64, blank=True, default='')
+    address_line1 = models.CharField(max_length=255, blank=True, default='')
+    address_line2 = models.CharField(max_length=255, blank=True, default='')
+    city = models.CharField(max_length=128, blank=True, default='')
+    postal_code = models.CharField(max_length=32, blank=True, default='')
+    country = models.CharField(max_length=128, blank=True, default='')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -182,6 +182,7 @@ def projects_collection(request):
             obj.name = name
             obj.data = proj
             obj.save()
+        audit_log(request, actor, action='project.create_or_update', entity_type='project', entity_id=obj.id, project=obj, metadata={'source': 'projects_collection'})
         return JsonResponse({'project': obj.as_dict()})
 
     return HttpResponseNotAllowed(['GET', 'POST'])
@@ -226,6 +227,7 @@ def project_detail(request, project_id: str):
             obj.name = name
             obj.data = proj
             obj.save()
+        audit_log(request, actor, action='project.create_or_update', entity_type='project', entity_id=obj.id, project=obj, metadata={'source': 'project_detail'})
         return JsonResponse({'project': obj.as_dict()})
 
     if request.method == 'DELETE':
@@ -234,7 +236,9 @@ def project_detail(request, project_id: str):
         obj = _projects_qs_for_actor(actor).filter(id=pid).first()
         if not obj or not can_edit_project(actor, obj):
             return JsonResponse({'error': 'Not found'}, status=404)
+        oid = obj.id
         obj.delete()
+        audit_log(request, actor, action='project.delete', entity_type='project', entity_id=oid)
         return JsonResponse({'ok': True})
 
     return HttpResponseNotAllowed(['GET', 'PUT', 'PATCH', 'DELETE'])
@@ -293,6 +297,7 @@ def projects_bulk(request):
         if ids_to_delete:
             deleted = _projects_qs_for_actor(actor).filter(id__in=ids_to_delete).delete()[0]
 
+    audit_log(request, actor, action='project.bulk_sync', entity_type='project', entity_id='bulk', metadata={'upserted': upserted, 'deleted': deleted})
     return JsonResponse({'ok': True, 'upserted': upserted, 'deleted': deleted})
 
 
@@ -310,8 +315,9 @@ def projects_reset(request):
         return HttpResponseNotAllowed(['POST'])
     if not require_role(actor, 'admin'):
         return JsonResponse({'error': 'Admin permission required'}, status=403)
-    _projects_qs_for_actor(actor).delete()
-    return JsonResponse({'ok': True})
+    deleted = _projects_qs_for_actor(actor).delete()[0]
+    audit_log(request, actor, action='project.reset', entity_type='project', entity_id='reset', metadata={'deleted': deleted})
+    return JsonResponse({'ok': True, 'deleted': deleted})
 
 
 @csrf_exempt
@@ -709,6 +715,7 @@ def admin_users(request):
                 'role': p.role,
                 'is_management': bool(p.is_management),
                 'is_active': bool(p.is_active),
+                'last_login': p.user.last_login.isoformat() if getattr(p.user, 'last_login', None) else None,
             })
         return JsonResponse({'users': data})
 
@@ -716,6 +723,38 @@ def admin_users(request):
         payload = json_body(request)
         if not isinstance(payload, dict):
             return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+
+        # create user path
+        if payload.get('create_user'):
+            username = str(payload.get('username') or '').strip()
+            password = str(payload.get('password') or '').strip()
+            email = str(payload.get('email') or '').strip()
+            role = str(payload.get('role') or 'viewer').strip().lower()
+            if not username or not password:
+                return JsonResponse({'error': 'username and password required'}, status=400)
+            if role not in {'viewer', 'editor', 'admin', 'superadmin'}:
+                return JsonResponse({'error': 'Invalid role'}, status=400)
+            if role == 'superadmin' and not actor.get('is_superadmin'):
+                return JsonResponse({'error': 'Only superadmin can create superadmin'}, status=403)
+
+            User = get_user_model()
+            if User.objects.filter(username=username).exists():
+                return JsonResponse({'error': 'Username already exists'}, status=400)
+
+            u = User.objects.create_user(username=username, email=email, password=password)
+            target_company = actor.get('company')
+            if actor.get('is_superadmin') and payload.get('company_id') not in (None, '', 'null'):
+                target_company = Company.objects.filter(id=payload.get('company_id')).first() or target_company
+
+            profile = UserCompanyProfile.objects.create(
+                user=u,
+                company=None if role == 'superadmin' else target_company,
+                role=role,
+                is_management=bool(payload.get('is_management')),
+                is_active=True,
+            )
+            audit_log(request, actor, action='admin.user.create', entity_type='user', entity_id=str(u.id), metadata={'username': username, 'role': role, 'company_id': profile.company_id})
+            return JsonResponse({'ok': True, 'user_id': u.id})
 
         try:
             uid = int(payload.get('user_id'))
@@ -787,6 +826,13 @@ def admin_companies(request):
             rows.append({
                 'id': c.id,
                 'name': c.name,
+                'vat_number': c.vat_number,
+                'registration_number': c.registration_number,
+                'address_line1': c.address_line1,
+                'address_line2': c.address_line2,
+                'city': c.city,
+                'postal_code': c.postal_code,
+                'country': c.country,
                 'is_active': bool(c.is_active),
             })
         return JsonResponse({'companies': rows})
@@ -796,18 +842,53 @@ def admin_companies(request):
         if not isinstance(payload, dict):
             return JsonResponse({'error': 'Invalid JSON body'}, status=400)
 
-        name = str(payload.get('name') or '').strip()
-        if not name:
-            return JsonResponse({'error': 'name required'}, status=400)
+        cid = payload.get('id')
+        if cid:
+            c = Company.objects.filter(id=cid).first()
+            if not c:
+                return JsonResponse({'error': 'Company not found'}, status=404)
+            created = False
+        else:
+            name = str(payload.get('name') or '').strip()
+            if not name:
+                return JsonResponse({'error': 'name required'}, status=400)
+            c, created = Company.objects.get_or_create(name=name, defaults={'is_active': True})
 
-        c, created = Company.objects.get_or_create(name=name, defaults={'is_active': True})
+        if 'name' in payload and str(payload.get('name') or '').strip():
+            c.name = str(payload.get('name')).strip()
+        if 'vat_number' in payload:
+            c.vat_number = str(payload.get('vat_number') or '').strip()
+        if 'registration_number' in payload:
+            c.registration_number = str(payload.get('registration_number') or '').strip()
+        if 'address_line1' in payload:
+            c.address_line1 = str(payload.get('address_line1') or '').strip()
+        if 'address_line2' in payload:
+            c.address_line2 = str(payload.get('address_line2') or '').strip()
+        if 'city' in payload:
+            c.city = str(payload.get('city') or '').strip()
+        if 'postal_code' in payload:
+            c.postal_code = str(payload.get('postal_code') or '').strip()
+        if 'country' in payload:
+            c.country = str(payload.get('country') or '').strip()
         if 'is_active' in payload:
             c.is_active = bool(payload.get('is_active'))
-            c.save(update_fields=['is_active', 'updated_at'])
+
+        c.save()
 
         audit_log(request, actor, action='admin.company.upsert', entity_type='company', entity_id=str(c.id), metadata={'created': created, 'name': c.name, 'is_active': c.is_active})
 
-        return JsonResponse({'ok': True, 'company': {'id': c.id, 'name': c.name, 'is_active': c.is_active}})
+        return JsonResponse({'ok': True, 'company': {
+            'id': c.id,
+            'name': c.name,
+            'vat_number': c.vat_number,
+            'registration_number': c.registration_number,
+            'address_line1': c.address_line1,
+            'address_line2': c.address_line2,
+            'city': c.city,
+            'postal_code': c.postal_code,
+            'country': c.country,
+            'is_active': c.is_active,
+        }})
 
     return HttpResponseNotAllowed(['GET', 'POST'])
 

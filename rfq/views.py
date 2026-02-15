@@ -1,12 +1,23 @@
 import copy
-from django.shortcuts import render, get_object_or_404
+from django.http import HttpResponseForbidden
+from django.shortcuts import render, get_object_or_404, redirect
 from .models import SupplierAccess
 
 
 def app(request, bundle_id=None):
+    if not request.user.is_authenticated:
+        return redirect(f"/admin/login/?next={request.path}")
     return render(request, 'rfq/app.html', {
         'build_version': 'django-v119-approve-creates-quote',
     })
+
+
+def mega_admin_dashboard(request):
+    if not request.user.is_authenticated:
+        return redirect(f"/admin/login/?next={request.path}")
+    if not request.user.is_superuser:
+        return HttpResponseForbidden('Superadmin only')
+    return render(request, 'rfq/mega_admin.html', {})
 
 
 def _merge_submitted_values(items, submission):

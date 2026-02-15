@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mega Admin Dashboard</title>
+  <style>
+    body{font-family:Inter,system-ui,Arial;margin:0;background:#0b1020;color:#e5e7eb}
+    .wrap{max-width:1200px;margin:0 auto;padding:18px}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .card{background:#121a31;border:1px solid #243056;border-radius:12px;padding:12px}
+    h1{margin:0;font-size:22px}.muted{color:#94a3b8;font-size:12px}
+    h3{margin:0 0 8px;font-size:14px}
+    input,select,button{border-radius:8px;border:1px solid #334155;background:#0f172a;color:#e5e7eb;padding:7px 8px;font-size:12px}
+    button{cursor:pointer;background:#334155}
+    .list{max-height:300px;overflow:auto;border:1px solid #334155;border-radius:8px}
+    .row{padding:8px;border-bottom:1px solid #1f2937;font-size:12px;display:flex;justify-content:space-between;gap:8px}
+    .row:last-child{border-bottom:0}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>🛡️ Mega Admin Dashboard</h1>
+        <div class="muted">Superuser control center: firmy, uživatelé, locky, audit</div>
+      </div>
+      <div class="controls">
+        <a href="/"><button>RFQ App</button></a>
+        <a href="/admin/logout/"><button>Logout</button></a>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>🏢 Companies</h3>
+        <div class="controls">
+          <input id="cname" placeholder="Company name" />
+          <input id="cvat" placeholder="VAT" />
+          <input id="creg" placeholder="Registration No" />
+          <input id="caddr" placeholder="Address line 1" />
+          <input id="ccity" placeholder="City" />
+          <input id="czip" placeholder="Postal code" />
+          <input id="ccountry" placeholder="Country" />
+          <button id="cadd">Add / Update</button>
+        </div>
+        <div id="companies" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h3>👥 Users / Roles</h3>
+        <div class="controls">
+          <input id="uname" placeholder="username" />
+          <input id="uemail" placeholder="email" />
+          <input id="upass" placeholder="password" />
+          <select id="urole"><option>viewer</option><option>editor</option><option>admin</option><option>superadmin</option></select>
+          <button id="ucreate">Create user</button>
+        </div>
+        <div id="users" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h3>🔒 Active Locks</h3>
+        <div class="controls"><button id="lrefresh">Refresh</button></div>
+        <div id="locks" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h3>📜 Audit Logs</h3>
+        <div class="controls">
+          <input id="af" placeholder="action filter" />
+          <input id="ef" placeholder="entity filter" />
+          <button id="arefresh">Refresh</button>
+        </div>
+        <div id="audit" class="list"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+async function j(url, o={}){const r=await fetch(url,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o});const d=await r.json().catch(()=>({}));if(!r.ok) throw new Error(d.error||r.status);return d;}
+const esc=s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+
+async function loadCompanies(){
+  const d=await j('/api/admin/companies');
+  const el=document.getElementById('companies');
+  el.innerHTML=(d.companies||[]).map(c=>`<div class='row'><div><b>${esc(c.name)}</b><div class='muted'>VAT: ${esc(c.vat_number||'')} • REG: ${esc(c.registration_number||'')} • ${esc([c.address_line1,c.city,c.postal_code,c.country].filter(Boolean).join(', '))}</div></div><div>${c.is_active?'active':'inactive'}</div></div>`).join('')||"<div class='row'>No companies</div>";
+}
+async function loadUsers(){
+  const d=await j('/api/admin/users');
+  const companies=(await j('/api/admin/companies')).companies||[];
+  const cOpts=(id)=>`<option value=''>none</option>`+companies.map(c=>`<option value='${c.id}' ${String(id)===String(c.id)?'selected':''}>${esc(c.name)}</option>`).join('');
+  const el=document.getElementById('users');
+  el.innerHTML=(d.users||[]).map(u=>`<div class='row'>
+      <div><b>${esc(u.username)}</b><div class='muted'>${esc(u.email||'')}</div></div>
+      <div class='controls'>
+        <select data-r='${u.user_id}'>${['viewer','editor','admin','superadmin'].map(r=>`<option ${u.role===r?'selected':''}>${r}</option>`).join('')}</select>
+        <label class='muted'><input type='checkbox' data-m='${u.user_id}' ${u.is_management?'checked':''}/>mgmt</label>
+        <select data-c='${u.user_id}'>${cOpts(u.company_id)}</select>
+        <button data-s='${u.user_id}'>Save</button>
+      </div>
+    </div>`).join('')||"<div class='row'>No users</div>";
+  el.querySelectorAll('[data-s]').forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.s;
+    const role=el.querySelector(`[data-r='${id}']`).value;
+    const mg=el.querySelector(`[data-m='${id}']`).checked;
+    const cid=el.querySelector(`[data-c='${id}']`).value||null;
+    await j('/api/admin/users',{method:'POST',body:JSON.stringify({user_id:Number(id),role,is_management:mg,company_id:cid})});
+    loadUsers();
+  });
+}
+async function loadLocks(){
+  const d=await j('/api/admin/locks?limit=200');
+  const el=document.getElementById('locks');
+  el.innerHTML=(d.locks||[]).map(l=>`<div class='row'><div><b>${esc(l.context)}</b><div class='muted'>${esc(l.project_name||l.project_id)} • ${esc(l.locked_by)}</div></div><div><button data-f='${esc(l.resource_key)}'>Force unlock</button></div></div>`).join('')||"<div class='row'>No active locks</div>";
+  el.querySelectorAll('[data-f]').forEach(b=>b.onclick=async()=>{await j('/api/locks/force_unlock',{method:'POST',body:JSON.stringify({resource_key:b.dataset.f})});loadLocks();});
+}
+async function loadAudit(){
+  const a=document.getElementById('af').value||''; const e=document.getElementById('ef').value||'';
+  const d=await j('/api/admin/audit_logs?limit=200&action='+encodeURIComponent(a)+'&entity_type='+encodeURIComponent(e));
+  const el=document.getElementById('audit');
+  el.innerHTML=(d.logs||[]).map(x=>`<div class='row'><div><b>${esc(x.action)}</b><div class='muted'>${esc(x.entity_type)} • ${esc(x.entity_id)} • ${esc(x.actor||'')}</div></div><div class='muted'>${esc((x.time||'').replace('T',' ').slice(0,19))}</div></div>`).join('')||"<div class='row'>No logs</div>";
+}
+
+document.getElementById('cadd').onclick=async()=>{const n=document.getElementById('cname').value.trim(); if(!n) return; await j('/api/admin/companies',{method:'POST',body:JSON.stringify({name:n,vat_number:document.getElementById('cvat').value.trim(),registration_number:document.getElementById('creg').value.trim(),address_line1:document.getElementById('caddr').value.trim(),city:document.getElementById('ccity').value.trim(),postal_code:document.getElementById('czip').value.trim(),country:document.getElementById('ccountry').value.trim()})}); ['cname','cvat','creg','caddr','ccity','czip','ccountry'].forEach(id=>document.getElementById(id).value=''); loadCompanies(); loadUsers();};
+document.getElementById('lrefresh').onclick=loadLocks;
+document.getElementById('arefresh').onclick=loadAudit;
+document.getElementById('ucreate').onclick=async()=>{const username=document.getElementById('uname').value.trim(); const password=document.getElementById('upass').value.trim(); if(!username||!password){alert('username+password required');return;} await j('/api/admin/users',{method:'POST',body:JSON.stringify({create_user:true,username,email:document.getElementById('uemail').value.trim(),password,role:document.getElementById('urole').value})}); ['uname','uemail','upass'].forEach(id=>document.getElementById(id).value=''); loadUsers();};
+Promise.all([loadCompanies(), loadUsers(), loadLocks(), loadAudit()]).catch(e=>alert('Admin load failed: '+e.message));
+</script>
+</body>
+</html>
