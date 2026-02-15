@@ -19,7 +19,8 @@ from .models import Project, Quote, QuoteLine, SupplierAccess
 def _projects_qs_for_actor(actor):
     qs = Project.objects.all()
     if actor and actor.get('is_superadmin'):
-        return qs
+        scope_company = actor.get('scope_company')
+        return qs.filter(company=scope_company) if scope_company else qs
     company = (actor or {}).get('company')
     if company is None:
         return qs.none()
@@ -29,7 +30,8 @@ def _projects_qs_for_actor(actor):
 def _quotes_qs_for_actor(actor):
     qs = Quote.objects.select_related('project')
     if actor and actor.get('is_superadmin'):
-        return qs
+        scope_company = actor.get('scope_company')
+        return qs.filter(company=scope_company) if scope_company else qs
     company = (actor or {}).get('company')
     if company is None:
         return qs.none()
@@ -39,7 +41,8 @@ def _quotes_qs_for_actor(actor):
 def _portal_qs_for_actor(actor):
     qs = SupplierAccess.objects.select_related('project').filter(status__in=['submitted', 'approved', 're_quote_requested'])
     if actor and actor.get('is_superadmin'):
-        return qs
+        scope_company = actor.get('scope_company')
+        return qs.filter(company=scope_company) if scope_company else qs
     company = (actor or {}).get('company')
     if company is None:
         return qs.none()

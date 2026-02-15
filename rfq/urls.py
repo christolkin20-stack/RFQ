@@ -12,6 +12,7 @@ urlpatterns = [
     # API
     path('api/health', api_projects.health, name='api_health'),
     path('api/session/me', api_projects.session_me, name='api_session_me'),
+    path('api/session/switch_company', api_projects.session_switch_company, name='api_session_switch_company'),
     path('api/projects', api_projects.projects_collection, name='api_projects_collection'),
     path('api/projects/bulk', api_projects.projects_bulk, name='api_projects_bulk'),
     path('api/projects/reset', api_projects.projects_reset, name='api_projects_reset'),

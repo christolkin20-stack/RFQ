@@ -132,7 +132,8 @@ def _merge_preserve_supplier_quotes(existing_data, incoming_data):
 def _projects_qs_for_actor(actor):
     qs = Project.objects.all()
     if actor and actor.get('is_superadmin'):
-        return qs
+        scope_company = actor.get('scope_company')
+        return qs.filter(company=scope_company) if scope_company else qs
     company = (actor or {}).get('company')
     if company is None:
         return qs.none()
@@ -152,17 +153,61 @@ def session_me(request):
     actor, auth_err = require_auth_and_profile(request)
     if auth_err:
         return auth_err
+    user = actor.get('user')
     company = actor.get('company')
-    return JsonResponse({
+    scope_company = actor.get('scope_company')
+    data = {
         'ok': True,
-        'user_id': actor.get('user_id'),
-        'username': actor.get('username'),
+        'user_id': getattr(user, 'id', None),
+        'username': getattr(user, 'username', ''),
         'role': actor.get('role'),
         'is_management': bool(actor.get('is_management')),
         'is_superadmin': bool(actor.get('is_superadmin')),
         'company_id': getattr(company, 'id', None),
         'company_name': getattr(company, 'name', ''),
-    })
+        'scope_company_id': getattr(scope_company, 'id', None),
+        'scope_company_name': getattr(scope_company, 'name', ''),
+    }
+    if actor.get('is_superadmin'):
+        data['companies'] = [{'id': c.id, 'name': c.name} for c in Company.objects.filter(is_active=True).order_by('name')]
+    return JsonResponse(data)
+
+
+@csrf_exempt
+def session_switch_company(request):
+    actor, auth_err = require_auth_and_profile(request)
+    if auth_err:
+        return auth_err
+
+    csrf_err = require_same_origin_for_unsafe(request)
+    if csrf_err:
+        return csrf_err
+
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    if not actor.get('is_superadmin'):
+        return JsonResponse({'error': 'Superadmin permission required'}, status=403)
+
+    payload = json_body(request)
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+
+    cid = payload.get('company_id')
+    if cid in (None, '', 'all'):
+        request.session['rfq_active_company_id'] = 'all'
+        request.session.modified = True
+        audit_log(request, actor, action='session.company_scope', entity_type='session', entity_id='all', metadata={'scope': 'all'})
+        return JsonResponse({'ok': True, 'scope': 'all'})
+
+    c = Company.objects.filter(id=cid, is_active=True).first()
+    if not c:
+        return JsonResponse({'error': 'Company not found'}, status=404)
+
+    request.session['rfq_active_company_id'] = c.id
+    request.session.modified = True
+    audit_log(request, actor, action='session.company_scope', entity_type='session', entity_id=str(c.id), metadata={'scope': c.name})
+    return JsonResponse({'ok': True, 'scope': 'company', 'company_id': c.id, 'company_name': c.name})
 
 
 @csrf_exempt

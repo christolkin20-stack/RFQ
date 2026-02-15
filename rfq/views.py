@@ -8,7 +8,7 @@ def app(request, bundle_id=None):
     if not request.user.is_authenticated:
         return redirect(f"/admin/login/?next={request.path}")
     return render(request, 'rfq/app.html', {
-        'build_version': 'django-v119-approve-creates-quote',
+        'build_version': 'django-v120-superadmin-company-scope',
     })
 
 

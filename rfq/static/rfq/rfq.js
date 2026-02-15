@@ -18,6 +18,7 @@ window.SystemApps.rfq = {
                     <div class="rfq-topbar-spacer"></div>
                     <div id="topbar-datetime" style="margin-right:12px; font-size:13px; white-space:nowrap; color: rgba(255,255,255,0.7); font-weight: 500;"></div>
                     <div id="topbar-user" style="margin-right:10px; font-size:12px; color: rgba(255,255,255,0.92);"></div>
+                    <select id="topbar-company-scope" style="display:none; margin-right:8px; font-size:12px; background:#0b1224; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 8px;"></select>
                     <a id="topbar-mega-link" href="/mega-admin/" style="display:none; margin-right:8px; color:#bfdbfe; font-size:12px; text-decoration:none;">Mega Admin</a>
                     <a href="/admin/logout/?next=/admin/login/" style="color:#fecaca; font-size:12px; text-decoration:none;">Logout</a>
                 </div>
@@ -18202,12 +18203,36 @@ Best regards`)}</textarea>
                 const topUser = document.getElementById('topbar-user');
                 if (topUser && data) {
                     const role = data.role ? ` (${data.role})` : '';
-                    const company = data.company_name ? ` • ${data.company_name}` : '';
-                    topUser.textContent = `👤 ${data.username || 'user'}${role}${company}`;
+                    const scoped = data.scope_company_name ? ` • scoped: ${data.scope_company_name}` : (data.company_name ? ` • ${data.company_name}` : '');
+                    topUser.textContent = `👤 ${data.username || 'user'}${role}${scoped}`;
                 }
                 const mega = document.getElementById('topbar-mega-link');
                 if (mega && (data.is_superadmin || data.is_management)) {
                     mega.style.display = 'inline';
+                }
+
+                const scopeSel = document.getElementById('topbar-company-scope');
+                if (scopeSel && data.is_superadmin) {
+                    const companies = Array.isArray(data.companies) ? data.companies : [];
+                    scopeSel.innerHTML = `<option value='all'>All companies</option>` + companies.map(c => `<option value='${c.id}'>${String(c.name || '').replace(/[<>&"']/g, '')}</option>`).join('');
+                    scopeSel.value = data.scope_company_id || 'all';
+                    scopeSel.style.display = 'inline-block';
+                    scopeSel.onchange = async () => {
+                        try {
+                            const v = scopeSel.value || 'all';
+                            const r = await fetch('/api/session/switch_company', {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ company_id: v })
+                            });
+                            const jr = await r.json().catch(() => ({}));
+                            if (!r.ok) throw new Error(jr.error || 'Switch failed');
+                            location.reload();
+                        } catch (e) {
+                            console.warn('Company switch failed', e);
+                        }
+                    };
                 }
             } catch (e) { }
         }

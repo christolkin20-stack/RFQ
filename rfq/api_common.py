@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from django.conf import settings as django_settings
 from django.http import JsonResponse
 
-from .models import AuditLog, ProjectAccess, UserCompanyProfile
+from .models import AuditLog, Company, ProjectAccess, UserCompanyProfile
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +95,7 @@ def get_request_actor(request):
         }
 
     role = (profile.role or 'viewer').lower()
-    return {
+    actor = {
         'user': user,
         'profile': profile,
         'company': profile.company,
@@ -103,6 +103,27 @@ def get_request_actor(request):
         'is_superadmin': role == 'superadmin',
         'is_management': bool(profile.is_management),
     }
+
+    # Optional active company scope for superadmin (selected in app UI)
+    if actor['is_superadmin']:
+        selected_company_id = request.session.get('rfq_active_company_id')
+        if selected_company_id not in (None, '', 'all'):
+            try:
+                c = Company.objects.filter(id=selected_company_id, is_active=True).first()
+            except Exception:
+                c = None
+            if c:
+                actor['scope_company'] = c
+                actor['scope_company_id'] = c.id
+            else:
+                request.session.pop('rfq_active_company_id', None)
+                actor['scope_company'] = None
+                actor['scope_company_id'] = None
+        else:
+            actor['scope_company'] = None
+            actor['scope_company_id'] = None
+
+    return actor
 
 
 def require_auth_and_profile(request):
