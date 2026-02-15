@@ -1201,6 +1201,15 @@ window.SystemApps.rfq = {
                                                 </div>
                                             </div>
                                         </div>
+                                        <div style="margin-top:10px;">
+                                            <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Audit Logs</div>
+                                            <div style="display:flex; gap:8px; margin-bottom:6px;">
+                                                <input id="settings-admin-audit-action" class="rfq-input" placeholder="Filter action" style="max-width:180px;" />
+                                                <input id="settings-admin-audit-entity" class="rfq-input" placeholder="Filter entity" style="max-width:180px;" />
+                                                <button id="btn-settings-admin-audit-refresh" class="btn-secondary" type="button">Refresh</button>
+                                            </div>
+                                            <div id="settings-admin-audit" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></div>
+                                        </div>
                                         <div id="settings-admin-note" style="margin-top:8px; font-size:11px; color:#64748b;"></div>
                                     </div>
                                 </div>
@@ -6758,6 +6767,25 @@ window.SystemApps.rfq = {
             }
         }
 
+        async function _acquireGenericViewLock(context) {
+            if (!currentProject || !context) return;
+            const key = `project:${String(currentProject.id || '')}:view:${context}`;
+            __editLock.resourceKey = key;
+            __editLock.projectId = String(currentProject.id || '');
+            __editLock.context = String(context);
+            try {
+                const res = await _lockFetchJson('/api/locks/acquire', {
+                    method: 'POST',
+                    body: { resource_key: key, project_id: __editLock.projectId, context: String(context), ttl_sec: 180 }
+                });
+                if (!res?.acquired) {
+                    const owner = res?.owner?.display || 'another user';
+                    const until = res?.expires_at ? new Date(res.expires_at).toLocaleTimeString() : '';
+                    showToast(`View locked by ${owner}${until ? ` until ${until}` : ''}. Opened read-only mode.`, 'warning');
+                }
+            } catch (_) { }
+        }
+
         async function _acquireItemDetailLock(item, index) {
             if (!currentProject) return;
             const key = _buildItemResourceKey(item, index);
@@ -10146,11 +10174,13 @@ window.SystemApps.rfq = {
                 updateSupplierFilter();
                 updateManufacturerFilter();
             } else if (view === 'suppliers' && viewSuppliers) {
+                try { _acquireGenericViewLock('suppliers'); } catch (_) { }
                 viewSuppliers.classList.remove('hidden');
                 if (navSuppliers) navSuppliers.classList.add('active');
                 highlightDropdownParent('nav-dropdown-project');
                 if (typeof renderSuppliers === 'function') renderSuppliers();
             } else if (view === 'project-suppliers' && viewProjectSuppliers) {
+                try { _acquireGenericViewLock('project-suppliers'); } catch (_) { }
                 viewProjectSuppliers.classList.remove('hidden');
                 if (navProjectSuppliers) navProjectSuppliers.classList.add('active');
                 highlightDropdownParent('nav-dropdown-project');
@@ -10187,6 +10217,7 @@ window.SystemApps.rfq = {
                 viewItemDetail.classList.remove('hidden');
                 // No nav tab is active for detail pages
             } else if (view === 'quoting' && viewQuoting) {
+                try { _acquireGenericViewLock('quoting'); } catch (_) { }
                 viewQuoting.classList.remove('hidden');
                 if (navQuoting) navQuoting.classList.add('active');
                 renderQuotingView();
@@ -20104,6 +20135,42 @@ Best regards`)}</textarea>
                     }
                 };
             }
+
+            const auditWrap = getEl('settings-admin-audit');
+            const auditAction = getEl('settings-admin-audit-action');
+            const auditEntity = getEl('settings-admin-audit-entity');
+            const auditBtn = getEl('btn-settings-admin-audit-refresh');
+
+            const loadAudit = async () => {
+                if (!auditWrap) return;
+                auditWrap.innerHTML = '<div style="padding:10px; font-size:11px; color:#64748b;">Loading...</div>';
+                try {
+                    const q = new URLSearchParams({
+                        limit: '120',
+                        action: String(auditAction?.value || '').trim(),
+                        entity_type: String(auditEntity?.value || '').trim(),
+                    });
+                    const ar = await _settingsFetchJson(`/api/admin/audit_logs?${q.toString()}`);
+                    const logs = Array.isArray(ar?.logs) ? ar.logs : [];
+                    auditWrap.innerHTML = logs.length ? logs.map(l => `
+                        <div style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:11px;">
+                            <div style="display:flex; justify-content:space-between; gap:8px;">
+                                <div style="font-weight:600; color:#0f172a;">${escapeHtml(l.action || '')}</div>
+                                <div style="color:#64748b;">${escapeHtml((l.time || '').replace('T',' ').slice(0,19))}</div>
+                            </div>
+                            <div style="color:#475569;">${escapeHtml(l.entity_type || '')} • ${escapeHtml(String(l.entity_id || ''))} • ${escapeHtml(l.actor || '')}</div>
+                        </div>
+                    `).join('') : '<div style="padding:10px; font-size:11px; color:#64748b;">No logs.</div>';
+                } catch (e) {
+                    auditWrap.innerHTML = '<div style="padding:10px; font-size:11px; color:#b91c1c;">Audit log unavailable.</div>';
+                }
+            };
+
+            if (auditBtn && !auditBtn.dataset.bound) {
+                auditBtn.dataset.bound = '1';
+                auditBtn.onclick = loadAudit;
+            }
+            loadAudit();
         }
 
         function renderSettings() {
