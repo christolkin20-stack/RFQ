@@ -1,4 +1,5 @@
 import copy
+from django.contrib.auth import logout as auth_logout
 from django.http import HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import SupplierAccess
@@ -8,7 +9,7 @@ def app(request, bundle_id=None):
     if not request.user.is_authenticated:
         return redirect(f"/admin/login/?next={request.path}")
     return render(request, 'rfq/app.html', {
-        'build_version': 'django-v122-main-visible-stability',
+        'build_version': 'django-v123-logout-fix',
     })
 
 
@@ -18,6 +19,12 @@ def mega_admin_dashboard(request):
     if not request.user.is_superuser:
         return HttpResponseForbidden('Superadmin only')
     return render(request, 'rfq/mega_admin.html', {})
+
+
+def app_logout(request):
+    auth_logout(request)
+    nxt = request.GET.get('next') or '/admin/login/'
+    return redirect(nxt)
 
 
 def _merge_submitted_values(items, submission):

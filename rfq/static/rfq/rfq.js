@@ -20,7 +20,7 @@ window.SystemApps.rfq = {
                     <div id="topbar-user" style="margin-right:10px; font-size:12px; color: rgba(255,255,255,0.92);"></div>
                     <select id="topbar-company-scope" style="display:none; margin-right:8px; font-size:12px; background:#0b1224; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 8px;"></select>
                     <a id="topbar-mega-link" href="/mega-admin/" style="display:none; margin-right:8px; color:#bfdbfe; font-size:12px; text-decoration:none;">Mega Admin</a>
-                    <a href="/admin/logout/?next=/admin/login/" style="color:#fecaca; font-size:12px; text-decoration:none;">Logout</a>
+                    <a href="/logout/?next=/admin/login/" style="color:#fecaca; font-size:12px; text-decoration:none;">Logout</a>
                 </div>
 
 
