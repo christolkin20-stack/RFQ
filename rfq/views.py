@@ -1,5 +1,5 @@
 import copy
-from django.contrib.auth import logout as auth_logout
+from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.http import HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import SupplierAccess
@@ -7,23 +7,44 @@ from .models import SupplierAccess
 
 def app(request, bundle_id=None):
     if not request.user.is_authenticated:
-        return redirect(f"/admin/login/?next={request.path}")
+        return redirect(f"/login/?next={request.path}")
     return render(request, 'rfq/app.html', {
-        'build_version': 'django-v123-logout-fix',
+        'build_version': 'django-v124-auth-login-fix',
     })
 
 
 def mega_admin_dashboard(request):
     if not request.user.is_authenticated:
-        return redirect(f"/admin/login/?next={request.path}")
+        return redirect(f"/login/?next={request.path}")
     if not request.user.is_superuser:
         return HttpResponseForbidden('Superadmin only')
     return render(request, 'rfq/mega_admin.html', {})
 
 
+def app_login(request):
+    if request.user.is_authenticated:
+        return redirect(request.GET.get('next') or '/')
+
+    error = ''
+    if request.method == 'POST':
+        username = (request.POST.get('username') or '').strip()
+        password = request.POST.get('password') or ''
+        nxt = request.POST.get('next') or '/'
+        user = authenticate(request, username=username, password=password)
+        if user is not None and getattr(user, 'is_active', True):
+            auth_login(request, user)
+            return redirect(nxt)
+        error = 'Neplatné přihlášení.'
+
+    return render(request, 'rfq/login.html', {
+        'next': request.GET.get('next') or request.POST.get('next') or '/',
+        'error': error,
+    })
+
+
 def app_logout(request):
     auth_logout(request)
-    nxt = request.GET.get('next') or '/admin/login/'
+    nxt = request.GET.get('next') or '/login/'
     return redirect(nxt)
 
 
