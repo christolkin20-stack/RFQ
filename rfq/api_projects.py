@@ -145,6 +145,17 @@ def _attach_company_from_project(instance, project):
         instance.company_id = getattr(project, 'company_id', None)
 
 
+def _write_company_for_actor(actor):
+    """Resolve company for write operations.
+    Superadmin must have explicit scope selected to avoid accidental cross-company/NULL writes.
+    """
+    if not actor:
+        return None
+    if actor.get('is_superadmin'):
+        return actor.get('scope_company')
+    return actor.get('company')
+
+
 def health(request):
     return JsonResponse({'ok': True})
 
@@ -232,15 +243,19 @@ def projects_collection(request):
         if not isinstance(payload, dict):
             return JsonResponse({'error': 'Invalid JSON body'}, status=400)
 
+        write_company = _write_company_for_actor(actor)
+        if write_company is None:
+            return JsonResponse({'error': 'Select company scope before creating/updating projects'}, status=400)
+
         proj = payload
         pid = str(proj.get('id') or uuid.uuid4().hex)
         name = str(proj.get('name') or 'Untitled')[:255]
         with transaction.atomic():
             obj = Project.objects.select_for_update().filter(id=pid).first()
             if not obj:
-                obj = Project(id=pid, name=name, data=proj, company=actor.get('scope_company') or actor.get('company'))
-            if not obj.company_id and (actor.get('scope_company') or actor.get('company')):
-                obj.company = actor.get('scope_company') or actor.get('company')
+                obj = Project(id=pid, name=name, data=proj, company=write_company)
+            if not obj.company_id and write_company:
+                obj.company = write_company
             elif obj.company_id and not can_edit_project(actor, obj):
                 return JsonResponse({'error': 'Access denied'}, status=403)
             obj.name = name
@@ -280,14 +295,18 @@ def project_detail(request, project_id: str):
         payload = json_body(request)
         if not isinstance(payload, dict):
             return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+        write_company = _write_company_for_actor(actor)
+        if write_company is None:
+            return JsonResponse({'error': 'Select company scope before creating/updating projects'}, status=400)
+
         proj = payload
         name = str(proj.get('name') or 'Untitled')[:255]
         with transaction.atomic():
             obj = Project.objects.select_for_update().filter(id=pid).first()
             if not obj:
-                obj = Project(id=pid, name=name, data=proj, company=actor.get('scope_company') or actor.get('company'))
-            if not obj.company_id and (actor.get('scope_company') or actor.get('company')):
-                obj.company = actor.get('scope_company') or actor.get('company')
+                obj = Project(id=pid, name=name, data=proj, company=write_company)
+            if not obj.company_id and write_company:
+                obj.company = write_company
             elif obj.company_id and not can_edit_project(actor, obj):
                 return JsonResponse({'error': 'Access denied'}, status=403)
             obj.name = name
@@ -326,6 +345,10 @@ def projects_bulk(request):
     if not require_role(actor, 'editor'):
         return JsonResponse({'error': 'Edit permission required'}, status=403)
 
+    write_company = _write_company_for_actor(actor)
+    if write_company is None:
+        return JsonResponse({'error': 'Select company scope before sync'}, status=400)
+
     payload = json_body(request)
     projects = None
     if isinstance(payload, dict) and isinstance(payload.get('projects'), list):
@@ -358,10 +381,10 @@ def projects_bulk(request):
                     skipped += 1
                     continue
             else:
-                obj = Project(id=pid, name=name, data=proj, company=actor.get('scope_company') or actor.get('company'))
+                obj = Project(id=pid, name=name, data=proj, company=write_company)
 
-            if not obj.company_id and (actor.get('scope_company') or actor.get('company')):
-                obj.company = actor.get('scope_company') or actor.get('company')
+            if not obj.company_id and write_company:
+                obj.company = write_company
 
             if obj.company_id and not can_edit_project(actor, obj):
                 skipped += 1
