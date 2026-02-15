@@ -23,3 +23,6 @@ rfq_backup_*.json
 
 # OS / misc
 Thumbs.db
+
+# Local debug logs
+scripts/*.log
