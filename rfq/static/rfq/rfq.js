@@ -6629,8 +6629,12 @@ window.SystemApps.rfq = {
 
         function setProjectNameUI(name) {
             const label = name && String(name).trim() ? String(name).trim() : 'Select...';
+            const stamp = (window.RFQData && typeof window.RFQData.getProjectVersionStamp === 'function')
+                ? window.RFQData.getProjectVersionStamp(currentProject)
+                : (currentProject && (currentProject.server_updated_at || currentProject.updated_at || currentProject.data_version_stamp || ''));
+            const versionTxt = stamp ? ` • v:${String(stamp).slice(0, 19)}` : '';
             if (currentProjectName) currentProjectName.textContent = label;
-            if (topbarProjectName) topbarProjectName.textContent = label;
+            if (topbarProjectName) topbarProjectName.textContent = `${label}${versionTxt}`;
 
             // Fix: Re-render Document Tracking when project changes (data isolation)
             if (typeof window.renderDocumentTracking === 'function') {
@@ -9522,8 +9526,15 @@ window.SystemApps.rfq = {
             }
         }
 
-        function initApp() {
-            // Load projects from storage
+        async function initApp() {
+            // Canonical bootstrap order: fetch server -> set in-memory -> render
+            try {
+                if (window.RFQData && typeof window.RFQData.bootstrapFromServer === 'function') {
+                    await window.RFQData.bootstrapFromServer();
+                }
+            } catch (e) { }
+
+            // Load projects from storage (already refreshed from server when reachable)
             if (typeof getProjects === 'function') {
                 projects = getProjects();
             }
@@ -9546,6 +9557,7 @@ window.SystemApps.rfq = {
                     refreshCurrentContextAfterDataSync();
                 });
             }
+            try { refreshCurrentContextAfterDataSync(); } catch (e) { }
 
             // Initialize dashboard layout system
             try { initDashboardLayout(); } catch (e) { console.warn('Dashboard layout init:', e); }
@@ -18290,6 +18302,7 @@ Best regards`)}</textarea>
                 // Session safety: prevent cross-user local cache leak in shared browser
                 try {
                     const sessionKey = `${data.user_id || ''}:${data.username || ''}:${data.company_id || ''}:${data.role || ''}`;
+                    window.__RFQ_SESSION_SCOPE__ = sessionKey;
                     const prevKey = localStorage.getItem('rfq_last_session_key');
                     if (prevKey && prevKey !== sessionKey) {
                         localStorage.removeItem('rfq_projects_v1');
@@ -22216,7 +22229,13 @@ Best regards`)}</textarea>
             projectPickerIsOpen = false;
             projectPickerPendingId = null;
             localStorage.setItem('rfq_active_project_id', project.id);
-            if (typeof updateProject === 'function') updateProject(currentProject);
+            // Do NOT mutate/persist on project switch; server bootstrap remains canonical.
+            try {
+                const q = JSON.parse(localStorage.getItem('rfq_sync_queue_v1') || '[]');
+                if (!Array.isArray(q) || q.length === 0) {
+                    localStorage.removeItem(`rfq_project_draft_v1_${String(project.id)}`);
+                }
+            } catch (e) { }
             setProjectNameUI(project.name);
             renderSidebar();
 
@@ -22232,6 +22251,7 @@ Best regards`)}</textarea>
 
             // Always switch to dashboard when project is selected
             switchView('dashboard');
+            try { refreshCurrentContextAfterDataSync(); } catch (e) { }
         }
 
 

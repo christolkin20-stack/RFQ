@@ -12,6 +12,8 @@
     ACTIVE_PROJECT: "rfq_active_project_id",
     PROJECTS_VERSION: "rfq_projects_version_v1",
     SYNC_SIGNAL: "rfq_sync_signal_v1",
+    SYNC_QUEUE: "rfq_sync_queue_v1",
+    DRAFT_PREFIX: "rfq_project_draft_v1_",
   };
 
   const TAB_ID = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -66,6 +68,59 @@ const nowIso = () => new Date().toISOString();
 
   const saveProjects = (projects) => {
     localStorage.setItem(LS_KEYS.PROJECTS, JSON.stringify(Array.isArray(projects) ? projects : []));
+  };
+
+  const getProjectVersionStamp = (project) => {
+    if (!project || typeof project !== 'object') return '';
+    const direct = project.server_updated_at || project.updated_at || project.version || '';
+    return String(direct || '').trim();
+  };
+
+  const clearDraftKeyForProject = (projectId) => {
+    if (!projectId) return;
+    try { localStorage.removeItem(`${LS_KEYS.DRAFT_PREFIX}${String(projectId)}`); } catch (_) {}
+  };
+
+  const clearStaleDraftKeysForProjectIfQueueEmpty = (projectId) => {
+    if (!projectId) return;
+    const q = safeJsonParse(localStorage.getItem(LS_KEYS.SYNC_QUEUE), []);
+    if (!Array.isArray(q) || q.length === 0) {
+      clearDraftKeyForProject(projectId);
+    }
+  };
+
+  const applyPendingDraftWithStrictGuard = (serverProject) => {
+    if (!serverProject || !serverProject.id) return serverProject;
+    const projectId = String(serverProject.id);
+    const raw = localStorage.getItem(`${LS_KEYS.DRAFT_PREFIX}${projectId}`);
+    if (!raw) return serverProject;
+    const draft = safeJsonParse(raw, null);
+    if (!draft || typeof draft !== 'object' || draft.pending !== true) return serverProject;
+
+    const queue = safeJsonParse(localStorage.getItem(LS_KEYS.SYNC_QUEUE), []);
+    if (!Array.isArray(queue) || queue.length === 0) {
+      clearDraftKeyForProject(projectId);
+      return serverProject;
+    }
+
+    const currentSession = String(window.__RFQ_SESSION_SCOPE__ || '');
+    if (!currentSession || String(draft.sessionScope || '') !== currentSession) return serverProject;
+
+    const serverStamp = getProjectVersionStamp(serverProject);
+    const baseStamp = String(draft.baseVersion || '');
+    if (!serverStamp || !baseStamp || baseStamp !== serverStamp) return serverProject;
+
+    if (!draft.project || typeof draft.project !== 'object') return serverProject;
+    return { ...serverProject, ...draft.project };
+  };
+
+  const stampProjectVersionMeta = (project) => {
+    if (!project || typeof project !== 'object') return project;
+    const stamp = getProjectVersionStamp(project) || nowIso();
+    return {
+      ...project,
+      data_version_stamp: stamp,
+    };
   };
 
   const bumpProjectsVersion = (reason) => {
@@ -247,8 +302,15 @@ const nowIso = () => new Date().toISOString();
   const queueSync = (delayMs) => {
     const d = Number(delayMs) || 800;
     if (_syncTimer) clearTimeout(_syncTimer);
+    try {
+      const q = safeJsonParse(localStorage.getItem(LS_KEYS.SYNC_QUEUE), []);
+      const arr = Array.isArray(q) ? q : [];
+      arr.push({ at: Date.now(), tab: TAB_ID, delay: d });
+      localStorage.setItem(LS_KEYS.SYNC_QUEUE, JSON.stringify(arr.slice(-20)));
+    } catch (_) {}
     _syncTimer = setTimeout(() => {
       _syncTimer = null;
+      try { localStorage.setItem(LS_KEYS.SYNC_QUEUE, '[]'); } catch (_) {}
       syncNow();
     }, d);
   };
@@ -259,10 +321,15 @@ const nowIso = () => new Date().toISOString();
     return _fetchJson(API.PROJECTS)
       .then(data => {
         const serverProjects = data && Array.isArray(data.projects) ? data.projects : [];
-        saveProjects(serverProjects);
+        const merged = serverProjects
+          .map(stampProjectVersionMeta)
+          .map(applyPendingDraftWithStrictGuard)
+          .map(stampProjectVersionMeta);
+        merged.forEach(p => clearStaleDraftKeysForProjectIfQueueEmpty(p && p.id));
+        saveProjects(merged);
         bumpProjectsVersion('bootstrap_from_server');
-        notifyDataUpdated({ reason: 'bootstrap_from_server', count: serverProjects.length });
-        return serverProjects;
+        notifyDataUpdated({ reason: 'bootstrap_from_server', count: merged.length });
+        return merged;
       })
       .catch(() => {
         // offline / server not reachable -> keep local only
@@ -355,17 +422,18 @@ const nowIso = () => new Date().toISOString();
     if (window.__RFQ_AUTH_INVALID__) return false;
     if (!project || typeof project !== "object") return false;
     const projects = getProjects();
-    const idx = projects.findIndex(p => String(p.id) === String(project.id));
+    const nextProject = stampProjectVersionMeta(project);
+    const idx = projects.findIndex(p => String(p.id) === String(nextProject.id));
     if (idx >= 0) {
-      projects[idx] = project;
+      projects[idx] = nextProject;
     } else {
-      projects.unshift(project);
+      projects.unshift(nextProject);
     }
-    project.updated_at = nowIso();
+    nextProject.updated_at = nowIso();
     saveProjects(projects);
     bumpProjectsVersion('update_project');
-    emitSyncSignal('mutation', { action: 'update_project', projectId: String(project.id || '') });
-    notifyDataUpdated({ reason: 'update_project', projectId: String(project.id || '') });
+    emitSyncSignal('mutation', { action: 'update_project', projectId: String(nextProject.id || '') });
+    notifyDataUpdated({ reason: 'update_project', projectId: String(nextProject.id || '') });
     try { queueSync(); } catch (e) {}
     return true;
   };
@@ -643,6 +711,7 @@ const nowIso = () => new Date().toISOString();
     findDuplicateParts,
     getProjectStatusOptions,
     addProjectStatusOption,
+    getProjectVersionStamp,
     syncNow,
     syncNowAsync,
     queueSync,
