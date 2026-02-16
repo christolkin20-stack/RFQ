@@ -10,7 +10,11 @@
   const LS_KEYS = {
     PROJECTS: "rfq_projects_v1",
     ACTIVE_PROJECT: "rfq_active_project_id",
+    PROJECTS_VERSION: "rfq_projects_version_v1",
+    SYNC_SIGNAL: "rfq_sync_signal_v1",
   };
+
+  const TAB_ID = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
   const safeJsonParse = (value, fallback) => {
     try {
@@ -62,6 +66,38 @@ const nowIso = () => new Date().toISOString();
 
   const saveProjects = (projects) => {
     localStorage.setItem(LS_KEYS.PROJECTS, JSON.stringify(Array.isArray(projects) ? projects : []));
+  };
+
+  const bumpProjectsVersion = (reason) => {
+    try {
+      localStorage.setItem(LS_KEYS.PROJECTS_VERSION, JSON.stringify({
+        tab: TAB_ID,
+        at: Date.now(),
+        reason: String(reason || 'mutation')
+      }));
+    } catch (_) {}
+  };
+
+  const emitSyncSignal = (type, detail) => {
+    try {
+      localStorage.setItem(LS_KEYS.SYNC_SIGNAL, JSON.stringify({
+        tab: TAB_ID,
+        at: Date.now(),
+        type: String(type || 'update'),
+        detail: detail || null,
+      }));
+    } catch (_) {}
+  };
+
+  const notifyDataUpdated = (detail) => {
+    try {
+      window.dispatchEvent(new CustomEvent('rfq:data-updated', {
+        detail: {
+          source: 'rfq_data',
+          ...(detail || {}),
+        }
+      }));
+    } catch (_) {}
   };
 
 
@@ -160,7 +196,13 @@ const nowIso = () => new Date().toISOString();
     const bodyStr = JSON.stringify({ projects });
     console.log(`[RFQ Sync] Sending ${projects.length} projects, body size: ${bodyStr.length} bytes`);
     _fetchJson(API.BULK, { method: 'POST', body: bodyStr })
-      .then(res => console.log('[RFQ Sync] Success:', res))
+      .then(async (res) => {
+        console.log('[RFQ Sync] Success:', res);
+        // Robustness: after successful write, always refresh from canonical server state.
+        const fresh = await bootstrapFromServer();
+        bumpProjectsVersion('post_write_refetch');
+        emitSyncSignal('server_refetch', { count: Array.isArray(fresh) ? fresh.length : 0 });
+      })
       .catch(err => {
         _handleSyncFailure(err);
         console.error('[RFQ Sync] Error:', err.message || err);
@@ -188,7 +230,12 @@ const nowIso = () => new Date().toISOString();
       _syncInFlight = true;
       const projects = getProjects();
       _fetchJson(API.BULK, { method: 'POST', body: JSON.stringify({ projects }) })
-        .then(res => { resolve(res); })
+        .then(async (res) => {
+          const fresh = await bootstrapFromServer();
+          bumpProjectsVersion('post_write_refetch');
+          emitSyncSignal('server_refetch', { count: Array.isArray(fresh) ? fresh.length : 0 });
+          resolve(res);
+        })
         .catch(err => {
           _handleSyncFailure(err);
           reject(err);
@@ -213,6 +260,8 @@ const nowIso = () => new Date().toISOString();
       .then(data => {
         const serverProjects = data && Array.isArray(data.projects) ? data.projects : [];
         saveProjects(serverProjects);
+        bumpProjectsVersion('bootstrap_from_server');
+        notifyDataUpdated({ reason: 'bootstrap_from_server', count: serverProjects.length });
         return serverProjects;
       })
       .catch(() => {
@@ -227,6 +276,33 @@ const nowIso = () => new Date().toISOString();
     window.addEventListener('beforeunload', () => { try { syncNow(); } catch (e) {} });
   } catch (e) {}
 
+  // Cross-tab consistency: when another tab mutates data, re-fetch from server.
+  let _remoteRefreshTimer = null;
+  const queueRemoteRefresh = (delayMs, reason) => {
+    if (_remoteRefreshTimer) clearTimeout(_remoteRefreshTimer);
+    _remoteRefreshTimer = setTimeout(() => {
+      _remoteRefreshTimer = null;
+      bootstrapFromServer()
+        .then(() => notifyDataUpdated({ reason: reason || 'remote_change' }))
+        .catch(() => {});
+    }, Number(delayMs) || 180);
+  };
+
+  try {
+    window.addEventListener('storage', (ev) => {
+      if (!ev || !ev.key) return;
+      if (ev.key === LS_KEYS.PROJECTS_VERSION || ev.key === LS_KEYS.SYNC_SIGNAL || ev.key === LS_KEYS.PROJECTS) {
+        // Ignore own sync signals when available
+        if ((ev.key === LS_KEYS.PROJECTS_VERSION || ev.key === LS_KEYS.SYNC_SIGNAL) && ev.newValue) {
+          try {
+            const payload = JSON.parse(ev.newValue);
+            if (payload && payload.tab && String(payload.tab) === String(TAB_ID)) return;
+          } catch (_) {}
+        }
+        queueRemoteRefresh(180, `storage:${ev.key}`);
+      }
+    });
+  } catch (e) {}
 
   const getProjects = () => {
     const projects = safeJsonParse(localStorage.getItem(LS_KEYS.PROJECTS), []);
@@ -267,6 +343,9 @@ const nowIso = () => new Date().toISOString();
     };
     projects.unshift(proj);
     saveProjects(projects);
+    bumpProjectsVersion('create_project');
+    emitSyncSignal('mutation', { action: 'create_project', projectId: String(proj.id) });
+    notifyDataUpdated({ reason: 'create_project', projectId: String(proj.id) });
     try { queueSync(); } catch (e) {}
     localStorage.setItem(LS_KEYS.ACTIVE_PROJECT, proj.id);
     return proj;
@@ -284,6 +363,9 @@ const nowIso = () => new Date().toISOString();
     }
     project.updated_at = nowIso();
     saveProjects(projects);
+    bumpProjectsVersion('update_project');
+    emitSyncSignal('mutation', { action: 'update_project', projectId: String(project.id || '') });
+    notifyDataUpdated({ reason: 'update_project', projectId: String(project.id || '') });
     try { queueSync(); } catch (e) {}
     return true;
   };
@@ -292,6 +374,9 @@ const nowIso = () => new Date().toISOString();
     if (window.__RFQ_AUTH_INVALID__) return false;
     const projects = getProjects().filter(p => String(p.id) !== String(projectId));
     saveProjects(projects);
+    bumpProjectsVersion('delete_project');
+    emitSyncSignal('mutation', { action: 'delete_project', projectId: String(projectId || '') });
+    notifyDataUpdated({ reason: 'delete_project', projectId: String(projectId || '') });
     try { queueSync(); } catch (e) {}
     const active = localStorage.getItem(LS_KEYS.ACTIVE_PROJECT);
     if (String(active) === String(projectId)) {
@@ -561,7 +646,16 @@ const nowIso = () => new Date().toISOString();
     syncNow,
     syncNowAsync,
     queueSync,
-    resetServer: function(){ return _fetchJson(API.RESET, { method: 'POST', body: '{}' }); },
+    resetServer: function(){
+      return _fetchJson(API.RESET, { method: 'POST', body: '{}' }).then((res) => {
+        saveProjects([]);
+        localStorage.removeItem(LS_KEYS.ACTIVE_PROJECT);
+        bumpProjectsVersion('reset_server');
+        emitSyncSignal('mutation', { action: 'reset_server' });
+        notifyDataUpdated({ reason: 'reset_server' });
+        return res;
+      });
+    },
     bootstrapFromServer,
   };
 

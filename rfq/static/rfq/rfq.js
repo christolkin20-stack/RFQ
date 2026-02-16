@@ -9502,6 +9502,26 @@ window.SystemApps.rfq = {
         window.openAddBoxModal = openAddBoxModal;
         window.refreshCustomBoxes = refreshCustomBoxes;
 
+        function refreshCurrentContextAfterDataSync() {
+            try {
+                if (typeof getProjects === 'function') {
+                    projects = getProjects();
+                }
+                if (currentProject && currentProject.id) {
+                    const fresh = (projects || []).find(p => String(p.id) === String(currentProject.id));
+                    currentProject = fresh || null;
+                    window.currentProject = currentProject;
+                }
+                try { renderSidebar(); } catch (_) { }
+                try { renderSidebarProjects(); } catch (_) { }
+                if (typeof switchView === 'function' && currentView) {
+                    switchView(currentView);
+                }
+            } catch (e) {
+                console.warn('refreshCurrentContextAfterDataSync failed', e);
+            }
+        }
+
         function initApp() {
             // Load projects from storage
             if (typeof getProjects === 'function') {
@@ -9519,6 +9539,13 @@ window.SystemApps.rfq = {
             updateMenuTime();
             setInterval(updateMenuTime, 1000);
             loadSessionInfo();
+
+            if (!window.__RFQ_DATA_SYNC_BOUND__) {
+                window.__RFQ_DATA_SYNC_BOUND__ = true;
+                window.addEventListener('rfq:data-updated', () => {
+                    refreshCurrentContextAfterDataSync();
+                });
+            }
 
             // Initialize dashboard layout system
             try { initDashboardLayout(); } catch (e) { console.warn('Dashboard layout init:', e); }
@@ -18280,10 +18307,7 @@ Best regards`)}</textarea>
                     if (window.RFQData && typeof window.RFQData.bootstrapFromServer === 'function') {
                         await window.RFQData.bootstrapFromServer();
                         projects = (window.RFQData.getProjects && window.RFQData.getProjects()) || projects;
-                        try { renderSidebar(); } catch (_) { }
-                        if (currentView === 'main') {
-                            try { renderMainOverview(); } catch (_) { }
-                        }
+                        refreshCurrentContextAfterDataSync();
                     }
                 } catch (e) { }
 
