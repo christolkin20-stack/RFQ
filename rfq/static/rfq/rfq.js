@@ -9335,18 +9335,11 @@ window.SystemApps.rfq = {
                     }
                 });
 
-                let __lastLockToastAt = 0;
                 window.addEventListener('rfq:project-lock-required', (ev) => {
                     const blocked = (ev && ev.detail && Array.isArray(ev.detail.blockedProjectIds)) ? ev.detail.blockedProjectIds.map(String) : [];
                     if (!blocked.length) return;
                     const activeId = currentProject && currentProject.id ? String(currentProject.id) : '';
                     if (activeId && !blocked.includes(activeId)) return;
-                    const now = Date.now();
-                    if (now - __lastLockToastAt < 8000) return;
-                    __lastLockToastAt = now;
-                    if (window.showToast) {
-                        window.showToast('Project Data lock required. Save blocked until lock is acquired.', 'warning');
-                    }
                     try { refreshItemDetailLockState(); } catch (e) { }
                 });
             }
@@ -24230,6 +24223,7 @@ Best regards`)}</textarea>
 
         let __itemDetailReadOnly = false;
         let __itemDetailLockTimer = null;
+        let __itemDetailReadOnlyAckSig = '';
 
         function _fmtLockExpiry(iso) {
             try {
@@ -24238,6 +24232,59 @@ Best regards`)}</textarea>
                 if (isNaN(d.getTime())) return String(iso);
                 return d.toLocaleString();
             } catch (e) { return String(iso || '-'); }
+        }
+
+        function _getLockSignature(info) {
+            const ownerId = info && info.owner && info.owner.user_id ? String(info.owner.user_id) : '';
+            const exp = info && info.expires_at ? String(info.expires_at) : '';
+            return `${ownerId}|${exp}`;
+        }
+
+        function _closeItemDetailReadonlyPrompt() {
+            const modal = getEl('item-detail-lock-choice-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function _showItemDetailReadonlyPrompt(info) {
+            const panel = getEl('view-item-detail');
+            if (!panel) return;
+            panel.style.position = panel.style.position || 'relative';
+
+            let modal = getEl('item-detail-lock-choice-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'item-detail-lock-choice-modal';
+                modal.style.cssText = 'position:absolute;inset:0;background:rgba(148,163,184,.20);z-index:65;display:none;align-items:center;justify-content:center;padding:16px;';
+                modal.innerHTML = '<div style="max-width:580px;width:100%;background:#ffffff;border:1px solid #cbd5e1;border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(15,23,42,.20);color:#0f172a;">'
+                    + '<div style="font-weight:800;font-size:16px;margin-bottom:8px;">🔒 Read-only mode (lock active)</div>'
+                    + '<div style="font-size:13px;color:#334155;line-height:1.45;">Another user currently edits this project. You can continue in strict view-only mode or return to Items.</div>'
+                    + '<div id="item-detail-lock-choice-meta" style="margin-top:10px;font-size:12px;color:#334155;"></div>'
+                    + '<div style="margin-top:14px;display:flex;gap:10px;justify-content:flex-end;">'
+                    + '  <button id="btn-item-detail-readonly-ok" class="btn-secondary">OK</button>'
+                    + '  <button id="btn-item-detail-readonly-back-items" class="btn-primary">Back to Items</button>'
+                    + '</div>'
+                    + '</div>';
+                panel.appendChild(modal);
+
+                const btnOk = getEl('btn-item-detail-readonly-ok');
+                if (btnOk) btnOk.addEventListener('click', () => _closeItemDetailReadonlyPrompt());
+                const btnBackItems = getEl('btn-item-detail-readonly-back-items');
+                if (btnBackItems) btnBackItems.addEventListener('click', () => {
+                    _closeItemDetailReadonlyPrompt();
+                    currentDetailIndex = null;
+                    if (typeof switchView === 'function') switchView('items');
+                    try { if (typeof renderItemsTable === 'function') renderItemsTable(); } catch (e) { }
+                });
+            }
+
+            const meta = getEl('item-detail-lock-choice-meta');
+            if (meta) {
+                const owner = (info && info.owner && info.owner.display) ? String(info.owner.display) : 'Unknown';
+                const exp = _fmtLockExpiry(info && info.expires_at);
+                meta.innerHTML = `<div><b>Owner:</b> ${escapeHtml(owner)}</div><div><b>Expires:</b> ${escapeHtml(exp)}</div>`;
+            }
+
+            modal.style.display = 'flex';
         }
 
         function setItemDetailReadOnlyMode(enabled, info) {
@@ -24250,11 +24297,10 @@ Best regards`)}</textarea>
             if (!ov) {
                 ov = document.createElement('div');
                 ov.id = 'item-detail-lock-overlay';
-                ov.style.cssText = 'position:absolute;inset:0;background:rgba(148,163,184,.45);backdrop-filter:grayscale(1);z-index:50;display:none;align-items:center;justify-content:center;padding:16px;';
-                ov.innerHTML = '<div style="max-width:560px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.18);color:#0f172a;">'
-                    + '<div style="font-weight:800;font-size:16px;margin-bottom:8px;">🔒 Read-only mode (lock active)</div>'
-                    + '<div style="font-size:13px;color:#334155;line-height:1.45;">Another user holds edit lock for this project. Editing and save actions are disabled.</div>'
-                    + '<div id="item-detail-lock-meta" style="margin-top:10px;font-size:12px;color:#334155;"></div>'
+                ov.style.cssText = 'position:absolute;inset:0;background:rgba(148,163,184,.14);z-index:50;display:none;pointer-events:none;';
+                ov.innerHTML = '<div style="position:absolute;top:10px;right:10px;max-width:360px;background:rgba(248,250,252,.96);border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;box-shadow:0 6px 16px rgba(15,23,42,.10);color:#0f172a;">'
+                    + '<div style="font-weight:800;font-size:13px;margin-bottom:4px;">🔒 Read-only mode (lock active)</div>'
+                    + '<div id="item-detail-lock-meta" style="font-size:12px;color:#334155;"></div>'
                     + '</div>';
                 panel.appendChild(ov);
             }
@@ -24263,7 +24309,7 @@ Best regards`)}</textarea>
             if (meta && enabled) {
                 const owner = (info && info.owner && info.owner.display) ? String(info.owner.display) : 'Unknown';
                 const exp = _fmtLockExpiry(info && info.expires_at);
-                meta.innerHTML = `<div><b>Owner:</b> ${escapeHtml(owner)}</div><div><b>Expires:</b> ${escapeHtml(exp)}</div>`;
+                meta.innerHTML = `<div><b>Owner:</b> ${escapeHtml(owner)}</div><div><b>Expires:</b> ${escapeHtml(exp)}</div><div style="margin-top:4px;">Editing is disabled. Use Back to return.</div>`;
             }
 
             const root = getActiveItemDetailRoot();
@@ -24273,9 +24319,15 @@ Best regards`)}</textarea>
                     if (el.id === 'btn-item-detail-back' || el.id === 'btn-detail-back') return;
                     if (enabled) {
                         if (!el.dataset.prevDisabled) el.dataset.prevDisabled = el.disabled ? '1' : '0';
+                        if (!el.dataset.prevOpacity) el.dataset.prevOpacity = el.style.opacity || '';
+                        if (!el.dataset.prevCursor) el.dataset.prevCursor = el.style.cursor || '';
                         el.disabled = true;
+                        el.style.opacity = '0.6';
+                        el.style.cursor = 'not-allowed';
                     } else {
                         if (el.dataset.prevDisabled === '0') el.disabled = false;
+                        el.style.opacity = typeof el.dataset.prevOpacity === 'string' ? el.dataset.prevOpacity : '';
+                        el.style.cursor = typeof el.dataset.prevCursor === 'string' ? el.dataset.prevCursor : '';
                     }
                 });
             }
@@ -24292,7 +24344,12 @@ Best regards`)}</textarea>
                 }
             });
 
-            ov.style.display = enabled ? 'flex' : 'none';
+            if (!enabled) {
+                __itemDetailReadOnlyAckSig = '';
+                _closeItemDetailReadonlyPrompt();
+            }
+
+            ov.style.display = enabled ? 'block' : 'none';
         }
 
         async function refreshItemDetailLockState() {
@@ -24305,6 +24362,13 @@ Best regards`)}</textarea>
                 const st = await window.RFQData.getProjectLockStatus(currentProject.id);
                 const foreign = !!(st && st.locked && !st.is_owner);
                 setItemDetailReadOnlyMode(foreign, st);
+                if (foreign) {
+                    const sig = _getLockSignature(st);
+                    if (sig && sig !== __itemDetailReadOnlyAckSig) {
+                        __itemDetailReadOnlyAckSig = sig;
+                        _showItemDetailReadonlyPrompt(st);
+                    }
+                }
             } catch (e) {
                 setItemDetailReadOnlyMode(false, null);
             }
@@ -24323,14 +24387,12 @@ Best regards`)}</textarea>
             if (!liveItem) return false;
 
             if (__itemDetailReadOnly) {
-                if (window.showToast) window.showToast('Read-only mode: another user holds edit lock.', 'warning');
                 return false;
             }
 
             if (window.RFQData && typeof window.RFQData.ensureProjectLock === 'function') {
                 const hasLock = await window.RFQData.ensureProjectLock(currentProject && currentProject.id);
                 if (!hasLock) {
-                    if (window.showToast) window.showToast('Project Data lock required. Save blocked until lock is acquired.', 'warning');
                     try { refreshItemDetailLockState(); } catch (e) { }
                     return false;
                 }
