@@ -6687,6 +6687,17 @@ window.SystemApps.rfq = {
         };
 
 
+        function _forceRelogin(reason = 'session_expired') {
+            try {
+                window.__RFQ_AUTH_INVALID__ = true;
+                _clearEditLockTimers();
+                _itemDetailSetReadOnly(true, '⚠️ Your session expired or access changed. Please log in again.');
+            } catch (_) { }
+            if (window.showToast) window.showToast('Session expired. Please log in again.', 'error');
+            const next = encodeURIComponent(window.location.pathname + window.location.search + window.location.hash);
+            setTimeout(() => { window.location.href = `/login/?next=${next}&reason=${encodeURIComponent(reason)}`; }, 400);
+        }
+
         async function _lockFetchJson(url, options = {}) {
             const opts = {
                 method: options.method || 'GET',
@@ -6697,9 +6708,40 @@ window.SystemApps.rfq = {
             const r = await fetch(url, opts);
             let data = {};
             try { data = await r.json(); } catch (_) { }
-            if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+            if (!r.ok) {
+                if (r.status === 401 || r.status === 403) _forceRelogin(r.status === 401 ? 'session_expired' : 'forbidden');
+                const err = new Error(data?.error || `HTTP ${r.status}`);
+                err.status = r.status;
+                err.data = data;
+                throw err;
+            }
             return data;
         }
+
+        try {
+            window.addEventListener('rfq:auth-invalidated', (ev) => {
+                const reason = ev && ev.detail && ev.detail.reason ? ev.detail.reason : 'session_expired';
+                _forceRelogin(reason);
+            });
+        } catch (_) { }
+
+        try {
+            window.addEventListener('rfq:project-reconciled', async (ev) => {
+                const pid = ev && ev.detail && ev.detail.projectId ? String(ev.detail.projectId) : '';
+                if (!pid || !currentProject || String(currentProject.id) !== pid) return;
+                try {
+                    const fresh = await fetch(`/api/projects/${encodeURIComponent(pid)}`, { credentials: 'same-origin' });
+                    if (fresh.ok) {
+                        const body = await fresh.json();
+                        if (body && body.project) {
+                            currentProject = body.project;
+                            if (window.showToast) window.showToast('Server version restored after lock conflict.', 'warning');
+                            renderCurrentView();
+                        }
+                    }
+                } catch (_) { }
+            });
+        } catch (_) { }
 
         function _buildItemResourceKey(item, index) {
             const pid = String(currentProject?.id || '');
@@ -20156,7 +20198,13 @@ Best regards`)}</textarea>
             const r = await fetch(url, opts);
             let data = {};
             try { data = await r.json(); } catch (_) { }
-            if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+            if (!r.ok) {
+                if (r.status === 401 || r.status === 403) _forceRelogin(r.status === 401 ? 'session_expired' : 'forbidden');
+                const err = new Error(data?.error || `HTTP ${r.status}`);
+                err.status = r.status;
+                err.data = data;
+                throw err;
+            }
             return data;
         }
 

@@ -156,6 +156,41 @@ def _write_company_for_actor(actor):
     return actor.get('company')
 
 
+def _active_foreign_lock(project, actor):
+    """Return active lock held by another user for this project (if any)."""
+    if not project:
+        return None
+    now = timezone.now()
+    user_id = getattr((actor or {}).get('user'), 'id', None)
+    q = EditLock.objects.filter(project=project, expires_at__gt=now)
+    if user_id:
+        q = q.exclude(locked_by_id=user_id)
+    return q.order_by('expires_at').first()
+
+
+def _lock_conflict_response(project, lock):
+    owner = ''
+    owner_id = None
+    if lock:
+        owner = lock.locked_by_display or ''
+        owner_id = lock.locked_by_id
+    return JsonResponse({
+        'error': 'Resource is locked by another user',
+        'code': 'lock_conflict',
+        'project_id': getattr(project, 'id', None),
+        'project': project.as_dict() if project else None,
+        'lock': {
+            'resource_key': getattr(lock, 'resource_key', ''),
+            'context': getattr(lock, 'context', ''),
+            'expires_at': lock.expires_at.isoformat() if lock and lock.expires_at else None,
+            'owner': {
+                'user_id': owner_id,
+                'display': owner,
+            },
+        } if lock else None,
+    }, status=409)
+
+
 def health(request):
     return JsonResponse({'ok': True})
 
@@ -258,6 +293,11 @@ def projects_collection(request):
                 obj.company = write_company
             elif obj.company_id and not can_edit_project(actor, obj):
                 return JsonResponse({'error': 'Access denied'}, status=403)
+
+            lock = _active_foreign_lock(obj, actor)
+            if lock:
+                return _lock_conflict_response(obj, lock)
+
             obj.name = name
             obj.data = proj
             obj.save()
@@ -309,6 +349,11 @@ def project_detail(request, project_id: str):
                 obj.company = write_company
             elif obj.company_id and not can_edit_project(actor, obj):
                 return JsonResponse({'error': 'Access denied'}, status=403)
+
+            lock = _active_foreign_lock(obj, actor)
+            if lock:
+                return _lock_conflict_response(obj, lock)
+
             obj.name = name
             obj.data = proj
             obj.save()
@@ -394,6 +439,10 @@ def projects_bulk(request):
             if obj.company_id and not can_edit_project(actor, obj):
                 skipped += 1
                 continue
+
+            lock = _active_foreign_lock(obj, actor)
+            if lock:
+                return _lock_conflict_response(obj, lock)
 
             obj.name = name
             obj.data = _merge_preserve_supplier_quotes(obj.data or {}, proj)

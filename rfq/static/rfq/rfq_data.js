@@ -87,7 +87,19 @@ const nowIso = () => new Date().toISOString();
         },
         credentials: 'same-origin',
         body: opts && opts.body !== undefined ? opts.body : undefined,
-      }).then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || ('HTTP ' + r.status)); }));
+      }).then(async (r) => {
+        let data = null;
+        try { data = await r.clone().json(); } catch (_) { data = null; }
+        if (r.ok) return data || {};
+        let txt = '';
+        if (!data) {
+          try { txt = await r.text(); } catch (_) { txt = ''; }
+        }
+        const err = new Error((data && (data.error || data.detail)) || txt || ('HTTP ' + r.status));
+        err.status = r.status;
+        err.data = data;
+        throw err;
+      });
     } catch (e) {
       return Promise.reject(e);
     }
@@ -111,21 +123,58 @@ const nowIso = () => new Date().toISOString();
   let _syncTimer = null;
   let _syncInFlight = false;
 
+  const _markAuthInvalid = (reason) => {
+    try {
+      window.__RFQ_AUTH_INVALID__ = true;
+      window.dispatchEvent(new CustomEvent('rfq:auth-invalidated', { detail: { reason: String(reason || 'auth_failed') } }));
+    } catch (_) {}
+  };
+
+  const _mergeServerProject = (serverProject) => {
+    if (!serverProject || !serverProject.id) return;
+    const projects = getProjects();
+    const idx = projects.findIndex(p => String(p.id) === String(serverProject.id));
+    if (idx >= 0) projects[idx] = serverProject;
+    else projects.unshift(serverProject);
+    saveProjects(projects);
+    try {
+      window.dispatchEvent(new CustomEvent('rfq:project-reconciled', { detail: { projectId: String(serverProject.id) } }));
+    } catch (_) {}
+  };
+
+  const _handleSyncFailure = (err) => {
+    const status = Number(err && err.status);
+    if (status === 401 || status === 403) {
+      _markAuthInvalid(status === 401 ? 'session_expired' : 'forbidden');
+      return;
+    }
+    if (status === 409 && err && err.data && err.data.code === 'lock_conflict') {
+      if (err.data.project) _mergeServerProject(err.data.project);
+    }
+  };
+
   const syncNow = () => {
-    if (_syncInFlight) return;
+    if (_syncInFlight || window.__RFQ_AUTH_INVALID__) return;
     _syncInFlight = true;
     const projects = getProjects();
     const bodyStr = JSON.stringify({ projects });
     console.log(`[RFQ Sync] Sending ${projects.length} projects, body size: ${bodyStr.length} bytes`);
     _fetchJson(API.BULK, { method: 'POST', body: bodyStr })
       .then(res => console.log('[RFQ Sync] Success:', res))
-      .catch(err => console.error('[RFQ Sync] Error:', err.message || err))
+      .catch(err => {
+        _handleSyncFailure(err);
+        console.error('[RFQ Sync] Error:', err.message || err);
+      })
       .finally(() => { _syncInFlight = false; });
   };
 
   // Awaitable version of syncNow — resolves when sync completes
   const syncNowAsync = () => {
     return new Promise((resolve, reject) => {
+      if (window.__RFQ_AUTH_INVALID__) {
+        reject(new Error('Session invalidated. Please log in again.'));
+        return;
+      }
       if (_syncInFlight) {
         // Wait for current sync to finish, then sync again
         const waitInterval = setInterval(() => {
@@ -140,7 +189,10 @@ const nowIso = () => new Date().toISOString();
       const projects = getProjects();
       _fetchJson(API.BULK, { method: 'POST', body: JSON.stringify({ projects }) })
         .then(res => { resolve(res); })
-        .catch(err => { reject(err); })
+        .catch(err => {
+          _handleSyncFailure(err);
+          reject(err);
+        })
         .finally(() => { _syncInFlight = false; });
     });
   };
@@ -196,6 +248,7 @@ const nowIso = () => new Date().toISOString();
   };
 
   const createProject = (name, extraDates) => {
+    if (window.__RFQ_AUTH_INVALID__) return null;
     const projects = getProjects();
     const proj = {
       id: uid(),
@@ -220,6 +273,7 @@ const nowIso = () => new Date().toISOString();
   };
 
   const updateProject = (project) => {
+    if (window.__RFQ_AUTH_INVALID__) return false;
     if (!project || typeof project !== "object") return false;
     const projects = getProjects();
     const idx = projects.findIndex(p => String(p.id) === String(project.id));
@@ -235,6 +289,7 @@ const nowIso = () => new Date().toISOString();
   };
 
   const deleteProject = (projectId) => {
+    if (window.__RFQ_AUTH_INVALID__) return false;
     const projects = getProjects().filter(p => String(p.id) !== String(projectId));
     saveProjects(projects);
     try { queueSync(); } catch (e) {}
