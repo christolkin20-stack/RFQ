@@ -9347,6 +9347,7 @@ window.SystemApps.rfq = {
                     if (window.showToast) {
                         window.showToast('Project Data lock required. Save blocked until lock is acquired.', 'warning');
                     }
+                    try { refreshItemDetailLockState(); } catch (e) { }
                 });
             }
 
@@ -10040,6 +10041,8 @@ window.SystemApps.rfq = {
             } else if (view === 'item-detail' && viewItemDetail) {
                 viewItemDetail.classList.remove('hidden');
                 // No nav tab is active for detail pages
+                try { ensureItemDetailLockWatcher(); } catch (e) { }
+                try { refreshItemDetailLockState(); } catch (e) { }
             } else if (view === 'quoting' && viewQuoting) {
                 viewQuoting.classList.remove('hidden');
                 if (navQuoting) navQuoting.classList.add('active');
@@ -24225,15 +24228,110 @@ Best regards`)}</textarea>
             return detailContent;
         }
 
+        let __itemDetailReadOnly = false;
+        let __itemDetailLockTimer = null;
+
+        function _fmtLockExpiry(iso) {
+            try {
+                if (!iso) return '-';
+                const d = new Date(iso);
+                if (isNaN(d.getTime())) return String(iso);
+                return d.toLocaleString();
+            } catch (e) { return String(iso || '-'); }
+        }
+
+        function setItemDetailReadOnlyMode(enabled, info) {
+            const panel = getEl('view-item-detail');
+            if (!panel) return;
+            __itemDetailReadOnly = !!enabled;
+
+            panel.style.position = panel.style.position || 'relative';
+            let ov = getEl('item-detail-lock-overlay');
+            if (!ov) {
+                ov = document.createElement('div');
+                ov.id = 'item-detail-lock-overlay';
+                ov.style.cssText = 'position:absolute;inset:0;background:rgba(148,163,184,.45);backdrop-filter:grayscale(1);z-index:50;display:none;align-items:center;justify-content:center;padding:16px;';
+                ov.innerHTML = '<div style="max-width:560px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:12px;padding:16px;box-shadow:0 8px 24px rgba(15,23,42,.18);color:#0f172a;">'
+                    + '<div style="font-weight:800;font-size:16px;margin-bottom:8px;">🔒 Read-only mode (lock active)</div>'
+                    + '<div style="font-size:13px;color:#334155;line-height:1.45;">Another user holds edit lock for this project. Editing and save actions are disabled.</div>'
+                    + '<div id="item-detail-lock-meta" style="margin-top:10px;font-size:12px;color:#334155;"></div>'
+                    + '</div>';
+                panel.appendChild(ov);
+            }
+
+            const meta = getEl('item-detail-lock-meta');
+            if (meta && enabled) {
+                const owner = (info && info.owner && info.owner.display) ? String(info.owner.display) : 'Unknown';
+                const exp = _fmtLockExpiry(info && info.expires_at);
+                meta.innerHTML = `<div><b>Owner:</b> ${escapeHtml(owner)}</div><div><b>Expires:</b> ${escapeHtml(exp)}</div>`;
+            }
+
+            const root = getActiveItemDetailRoot();
+            if (root) {
+                root.querySelectorAll('input,select,textarea,button').forEach(el => {
+                    if (!el) return;
+                    if (el.id === 'btn-item-detail-back' || el.id === 'btn-detail-back') return;
+                    if (enabled) {
+                        if (!el.dataset.prevDisabled) el.dataset.prevDisabled = el.disabled ? '1' : '0';
+                        el.disabled = true;
+                    } else {
+                        if (el.dataset.prevDisabled === '0') el.disabled = false;
+                    }
+                });
+            }
+
+            ['btn-item-detail-save', 'btn-item-detail-save-back', 'btn-save-detail', 'btn-save-detail-no-close'].forEach(id => {
+                const b = getEl(id);
+                if (!b) return;
+                if (enabled) {
+                    b.disabled = true;
+                    b.style.display = 'none';
+                } else {
+                    b.disabled = false;
+                    b.style.display = '';
+                }
+            });
+
+            ov.style.display = enabled ? 'flex' : 'none';
+        }
+
+        async function refreshItemDetailLockState() {
+            try {
+                if (currentView !== 'item-detail' || !currentProject || !currentProject.id) {
+                    setItemDetailReadOnlyMode(false, null);
+                    return;
+                }
+                if (!window.RFQData || typeof window.RFQData.getProjectLockStatus !== 'function') return;
+                const st = await window.RFQData.getProjectLockStatus(currentProject.id);
+                const foreign = !!(st && st.locked && !st.is_owner);
+                setItemDetailReadOnlyMode(foreign, st);
+            } catch (e) {
+                setItemDetailReadOnlyMode(false, null);
+            }
+        }
+
+        function ensureItemDetailLockWatcher() {
+            if (__itemDetailLockTimer) return;
+            __itemDetailLockTimer = setInterval(() => {
+                refreshItemDetailLockState().catch(() => { });
+            }, 8000);
+        }
+
         async function saveDetailChanges(shouldClose = true) {
             if (currentDetailIndex === null) return false;
             const liveItem = currentProject && currentProject.items ? currentProject.items[currentDetailIndex] : null;
             if (!liveItem) return false;
 
+            if (__itemDetailReadOnly) {
+                if (window.showToast) window.showToast('Read-only mode: another user holds edit lock.', 'warning');
+                return false;
+            }
+
             if (window.RFQData && typeof window.RFQData.ensureProjectLock === 'function') {
                 const hasLock = await window.RFQData.ensureProjectLock(currentProject && currentProject.id);
                 if (!hasLock) {
                     if (window.showToast) window.showToast('Project Data lock required. Save blocked until lock is acquired.', 'warning');
+                    try { refreshItemDetailLockState(); } catch (e) { }
                     return false;
                 }
             }

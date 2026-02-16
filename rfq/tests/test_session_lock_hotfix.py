@@ -74,6 +74,31 @@ class SessionAndLockHotfixTests(TestCase):
         self.project_a.refresh_from_db()
         self.assertEqual(self.project_a.name, 'Proj A')
 
+    def test_locks_status_reports_is_owner_flag(self):
+        c1 = self.client
+        c2 = self.client_class()
+        self.assertTrue(c1.login(username='admin_a_hotfix', password='pw12345'))
+        self.assertTrue(c2.login(username='editor_a_hotfix', password='pw12345'))
+
+        acquire = c1.post(
+            '/api/locks/acquire',
+            data=json.dumps({'resource_key': 'project:proj-hotfix-a:edit', 'project_id': 'proj-hotfix-a', 'context': 'project-data'}),
+            content_type='application/json',
+            **self._origin(),
+        )
+        self.assertEqual(acquire.status_code, 200)
+        self.assertTrue(acquire.json().get('acquired'))
+
+        owner_view = c1.get('/api/locks/status?resource_key=project:proj-hotfix-a:edit')
+        self.assertEqual(owner_view.status_code, 200)
+        self.assertTrue(owner_view.json().get('locked'))
+        self.assertTrue(owner_view.json().get('is_owner'))
+
+        foreign_view = c2.get('/api/locks/status?resource_key=project:proj-hotfix-a:edit')
+        self.assertEqual(foreign_view.status_code, 200)
+        self.assertTrue(foreign_view.json().get('locked'))
+        self.assertFalse(foreign_view.json().get('is_owner'))
+
     def test_admin_force_unlock_own_company_emits_audit_log(self):
         self.assertTrue(self.client.login(username='admin_a_hotfix', password='pw12345'))
 

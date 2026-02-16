@@ -847,10 +847,12 @@ def locks_status(request):
     if not lock or lock.expires_at <= now:
         return JsonResponse({'ok': True, 'locked': False, 'resource_key': resource_key})
 
+    actor_user_id = getattr(actor.get('user'), 'id', None)
     return JsonResponse({
         'ok': True,
         'locked': True,
         'resource_key': resource_key,
+        'is_owner': bool(actor_user_id and lock.locked_by_id == actor_user_id),
         'owner': {
             'user_id': lock.locked_by_id,
             'display': lock.locked_by_display,

@@ -147,6 +147,7 @@ const nowIso = () => new Date().toISOString();
     ACQUIRE: '/api/locks/acquire',
     HEARTBEAT: '/api/locks/heartbeat',
     RELEASE: '/api/locks/release',
+    STATUS: '/api/locks/status',
     TTL_SEC: 180,
   };
 
@@ -186,6 +187,24 @@ const nowIso = () => new Date().toISOString();
       return await _ensureProjectLock(projectId);
     } catch (e) {
       return false;
+    }
+  };
+
+  const getProjectLockStatus = async (projectId) => {
+    if (!projectId) return { locked: false, is_owner: false, owner: null, expires_at: null };
+    const resource_key = _lockResourceKey(projectId);
+    try {
+      const q = `${LOCK.STATUS}?resource_key=${encodeURIComponent(resource_key)}`;
+      const res = await _fetchJson(q, { method: 'GET' });
+      return {
+        locked: !!(res && res.locked),
+        is_owner: !!(res && res.is_owner),
+        owner: res && res.owner ? res.owner : null,
+        expires_at: res && res.expires_at ? res.expires_at : null,
+        resource_key,
+      };
+    } catch (e) {
+      return { locked: false, is_owner: false, owner: null, expires_at: null, resource_key };
     }
   };
 
@@ -711,6 +730,7 @@ const nowIso = () => new Date().toISOString();
     syncNowAsync,
     queueSync,
     ensureProjectLock,
+    getProjectLockStatus,
     resetServer: function(){ return _fetchJson(API.RESET, { method: 'POST', body: '{}' }); },
     bootstrapFromServer,
   };
