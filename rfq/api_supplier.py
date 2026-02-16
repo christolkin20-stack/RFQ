@@ -10,14 +10,24 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .api_common import (
     audit_log as _audit_log,
+    can_view_project as _can_view_project,
     get_buyer_username as _get_buyer_username,
     json_body as _json_body,
     require_auth_and_profile as _require_auth_and_profile,
+    require_role as _require_role,
     require_same_origin_for_unsafe as _require_same_origin_for_unsafe,
 )
 from .models import Project, Quote, QuoteLine, SupplierAccess, SupplierAccessRound, SupplierInteractionFile
 
 logger = logging.getLogger(__name__)
+
+
+def _require_supplier_editor(actor):
+    return _require_role(actor, 'editor')
+
+
+def _require_supplier_admin(actor):
+    return _require_role(actor, 'admin')
 
 
 def _projects_qs_for_actor(actor):
@@ -146,6 +156,9 @@ def supplier_access_generate(request):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_supplier_editor(actor):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     payload = _json_body(request) or {}
     pid = str(payload.get('project_id') or '')
@@ -323,6 +336,9 @@ def supplier_access_approve(request, token):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_supplier_admin(actor):
+        return JsonResponse({'error': 'Admin permission required'}, status=403)
 
     try:
         access = _supplier_access_qs_for_actor(actor).get(id=token)
@@ -666,6 +682,9 @@ def supplier_access_reject(request, token):
     if csrf_err:
         return csrf_err
 
+    if not _require_supplier_admin(actor):
+        return JsonResponse({'error': 'Admin permission required'}, status=403)
+
     try:
         access = _supplier_access_qs_for_actor(actor).get(id=token)
     except SupplierAccess.DoesNotExist:
@@ -779,16 +798,20 @@ def supplier_interaction_file_download(request, file_id):
         return HttpResponseNotAllowed(['GET'])
 
     try:
-        f = SupplierInteractionFile.objects.get(id=file_id)
+        f = SupplierInteractionFile.objects.select_related('supplier_access', 'supplier_access__project').get(id=file_id)
     except SupplierInteractionFile.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
 
     has_access = False
     if request.user.is_authenticated:
-        has_access = True
+        actor, auth_err = _require_auth_and_profile(request)
+        if not auth_err:
+            scoped_access = _supplier_access_qs_for_actor(actor).filter(id=f.supplier_access_id).first()
+            if scoped_access and _can_view_project(actor, scoped_access.project):
+                has_access = True
 
     token = request.GET.get('token')
-    if token and f.supplier_access.id == token:
+    if token and token == f.supplier_access_id:
         has_access = True
 
     if not has_access:
@@ -809,7 +832,7 @@ def supplier_access_request_reopen(request, token):
         return HttpResponseNotAllowed(['POST'])
 
     try:
-        access = _supplier_access_qs_for_actor(actor).get(id=token)
+        access = SupplierAccess.objects.get(id=token)
     except SupplierAccess.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
 
@@ -844,6 +867,9 @@ def supplier_access_update_items(request, token):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_supplier_editor(actor):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     try:
         access = _supplier_access_qs_for_actor(actor).select_for_update().get(id=token)
@@ -905,6 +931,9 @@ def supplier_access_cancel(request, token):
     if csrf_err:
         return csrf_err
 
+    if not _require_supplier_admin(actor):
+        return JsonResponse({'error': 'Admin permission required'}, status=403)
+
     try:
         access = _supplier_access_qs_for_actor(actor).get(id=token)
     except SupplierAccess.DoesNotExist:
@@ -929,6 +958,9 @@ def supplier_access_reopen_buyer(request, token):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_supplier_admin(actor):
+        return JsonResponse({'error': 'Admin permission required'}, status=403)
 
     try:
         access = _supplier_access_qs_for_actor(actor).get(id=token)
@@ -977,6 +1009,9 @@ def supplier_access_bulk_generate(request):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_supplier_editor(actor):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     payload = _json_body(request) or {}
     pid = str(payload.get('project_id') or '')

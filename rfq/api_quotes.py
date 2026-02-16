@@ -11,6 +11,7 @@ from .api_common import (
     get_buyer_username as _get_buyer_username,
     json_body as _json_body,
     require_auth_and_profile as _require_auth_and_profile,
+    require_role as _require_role,
     require_same_origin_for_unsafe as _require_same_origin_for_unsafe,
 )
 from .models import Project, Quote, QuoteLine, SupplierAccess
@@ -309,6 +310,9 @@ def quotes_create(request):
     if csrf_err:
         return csrf_err
 
+    if not _require_role(actor, 'editor'):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
+
     try:
         data = json.loads(request.body.decode('utf-8'))
     except (ValueError, UnicodeDecodeError):
@@ -404,6 +408,9 @@ def quotes_update(request, quote_id):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_role(actor, 'editor'):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     try:
         quote = _quotes_qs_for_actor(actor).get(id=quote_id)
@@ -502,6 +509,9 @@ def quotes_delete(request, quote_id):
     if csrf_err:
         return csrf_err
 
+    if not _require_role(actor, 'admin'):
+        return JsonResponse({'error': 'Admin permission required'}, status=403)
+
     try:
         quote = _quotes_qs_for_actor(actor).get(id=quote_id)
     except Quote.DoesNotExist:
@@ -527,6 +537,9 @@ def quotes_create_from_item(request):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_role(actor, 'editor'):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     from datetime import timedelta
     from django.utils import timezone
@@ -608,6 +621,9 @@ def quotes_export_to_item(request):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_role(actor, 'editor'):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     from django.utils import timezone
 
@@ -708,6 +724,9 @@ def quotes_bulk_import(request):
     if csrf_err:
         return csrf_err
 
+    if not _require_role(actor, 'editor'):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
+
     payload = _json_body(request)
     if not isinstance(payload, list):
         return JsonResponse({'error': 'Expected a list of quotes'}, status=400)
@@ -786,6 +805,9 @@ def quotes_upsert_from_planner(request):
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
+
+    if not _require_role(actor, 'editor'):
+        return JsonResponse({'error': 'Edit permission required'}, status=403)
 
     from datetime import timedelta
     from django.utils import timezone

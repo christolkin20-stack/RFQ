@@ -1112,5 +1112,37 @@ def admin_audit_logs(request):
     return JsonResponse({'logs': rows})
 
 
-# bridge until export module extraction
-export_data = _v.export_data
+@csrf_exempt
+def export_data(request):
+    actor, auth_err = require_auth_and_profile(request)
+    if auth_err:
+        return auth_err
+
+    csrf_err = require_same_origin_for_unsafe(request)
+    if csrf_err:
+        return csrf_err
+
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+
+    payload = json_body(request)
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+
+    project_ids = payload.get('project_ids') or []
+    if not isinstance(project_ids, list) or not project_ids:
+        return JsonResponse({'error': 'project_ids is required'}, status=400)
+
+    requested_ids = [str(x) for x in project_ids]
+    scoped = _projects_qs_for_actor(actor).filter(id__in=requested_ids)
+    allowed_ids = set()
+    for p in scoped:
+        if can_view_project(actor, p):
+            allowed_ids.add(str(p.id))
+
+    denied_ids = [pid for pid in requested_ids if pid not in allowed_ids]
+    if denied_ids:
+        return JsonResponse({'error': 'Access denied for one or more project_ids', 'denied_project_ids': denied_ids}, status=403)
+
+    # Delegate rendering/export formatting to legacy implementation after strict scope check.
+    return _v.export_data(request)

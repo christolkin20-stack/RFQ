@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 def get_default_company_id():
@@ -255,8 +256,8 @@ class SupplierInteractionFile(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.company_id:
-            if self.project_id and self.project and self.project.company_id:
-                self.company_id = self.project.company_id
+            if self.supplier_access_id and self.supplier_access and self.supplier_access.company_id:
+                self.company_id = self.supplier_access.company_id
             else:
                 self.company_id = get_default_company_id()
         super().save(*args, **kwargs)
@@ -346,9 +347,8 @@ class Quote(models.Model):
                 self.company_id = get_default_company_id()
         # Auto-generate quote_number if empty: SUPPLIER_YYYYMMDD_HHMM
         if not self.quote_number:
-            from datetime import datetime
             supplier_slug = self.supplier_name.replace(' ', '_')[:20]
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M')
+            timestamp = timezone.now().strftime('%Y%m%d_%H%M')
             self.quote_number = f'{supplier_slug}_{timestamp}'
 
         # Auto-generate attachment_name if file exists but name is empty
