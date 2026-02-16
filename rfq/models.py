@@ -80,7 +80,9 @@ class Project(models.Model):
         d = dict(self.data or {})
         d.setdefault('id', self.id)
         d.setdefault('name', self.name)
-        d['server_updated_at'] = self.updated_at.isoformat()
+        version = self.updated_at.isoformat()
+        d['server_updated_at'] = version
+        d['data_version'] = version
         d['server_created_at'] = self.created_at.isoformat()
         return d
 

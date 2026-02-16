@@ -191,6 +191,47 @@ def _lock_conflict_response(project, lock):
     }, status=409)
 
 
+def _project_version(project):
+    if not project or not getattr(project, 'updated_at', None):
+        return ''
+    return project.updated_at.isoformat()
+
+
+def _extract_base_version(payload):
+    if not isinstance(payload, dict):
+        return ''
+    base = payload.get('base_version')
+    if base in (None, ''):
+        base = payload.get('server_updated_at')
+    if base in (None, ''):
+        base = payload.get('data_version')
+    return str(base or '').strip()
+
+
+def _version_conflict_response(project, base_version, reason='stale_base_version'):
+    return JsonResponse({
+        'error': 'Project was modified on server. Reloaded canonical state.',
+        'code': 'version_conflict',
+        'reason': reason,
+        'project_id': getattr(project, 'id', None),
+        'base_version': str(base_version or ''),
+        'server_version': _project_version(project),
+        'project': project.as_dict() if project else None,
+    }, status=409)
+
+
+def _ensure_matching_base_version(project, payload):
+    if not project:
+        return None
+    base_version = _extract_base_version(payload)
+    server_version = _project_version(project)
+    if not base_version:
+        return _version_conflict_response(project, base_version, reason='missing_base_version')
+    if base_version != server_version:
+        return _version_conflict_response(project, base_version, reason='stale_base_version')
+    return None
+
+
 def health(request):
     return JsonResponse({'ok': True})
 
@@ -298,6 +339,10 @@ def projects_collection(request):
             if lock:
                 return _lock_conflict_response(obj, lock)
 
+            conflict = _ensure_matching_base_version(obj, proj)
+            if conflict:
+                return conflict
+
             obj.name = name
             obj.data = proj
             obj.save()
@@ -353,6 +398,10 @@ def project_detail(request, project_id: str):
             lock = _active_foreign_lock(obj, actor)
             if lock:
                 return _lock_conflict_response(obj, lock)
+
+            conflict = _ensure_matching_base_version(obj, proj)
+            if conflict:
+                return conflict
 
             obj.name = name
             obj.data = proj
@@ -443,6 +492,10 @@ def projects_bulk(request):
             lock = _active_foreign_lock(obj, actor)
             if lock:
                 return _lock_conflict_response(obj, lock)
+
+            conflict = _ensure_matching_base_version(obj, proj)
+            if conflict:
+                return conflict
 
             obj.name = name
             obj.data = _merge_preserve_supplier_quotes(obj.data or {}, proj)

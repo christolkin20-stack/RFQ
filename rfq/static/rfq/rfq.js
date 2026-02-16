@@ -2,6 +2,7 @@
  * RFQ System Application
  */
 window.SystemApps = window.SystemApps || {};
+window.__RFQ_BUILD_VERSION__ = 'v76_2'; // FINAL SUMMARY - Challenge selected items, selection indicator
 
 window.SystemApps.rfq = {
     title: 'RFQ System',
@@ -16,10 +17,6 @@ window.SystemApps.rfq = {
                     <div class="rfq-brand">⚡ OptiChain RFQ</div>
                     <div class="rfq-topbar-spacer"></div>
                     <div id="topbar-datetime" style="margin-right:12px; font-size:13px; white-space:nowrap; color: rgba(255,255,255,0.7); font-weight: 500;"></div>
-                    <div id="topbar-user" style="margin-right:10px; font-size:12px; color: rgba(255,255,255,0.92);"></div>
-                    <select id="topbar-company-scope" style="display:none; margin-right:8px; font-size:12px; background:#0b1224; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 8px;"></select>
-                    <a id="topbar-mega-link" href="/mega-admin/" style="display:none; margin-right:8px; color:#bfdbfe; font-size:12px; text-decoration:none;">Mega Admin</a>
-                    <a href="/logout/?next=/login/" style="color:#fecaca; font-size:12px; text-decoration:none;">Logout</a>
                 </div>
 
 
@@ -37,6 +34,7 @@ window.SystemApps.rfq = {
                     <button id="nav-database" class="nav-dropdown-item" type="button">Database</button>
                     <button id="nav-quotes" class="nav-dropdown-item" type="button">💰 Quotes</button>
                     <button id="nav-doc-manager" class="nav-dropdown-item" type="button">📂 Document Manager</button>
+                    <button id="nav-ai-chat" class="nav-dropdown-item" type="button">🤖 AI Assistant</button>
                 </div>
             </div>
 
@@ -378,6 +376,7 @@ window.SystemApps.rfq = {
         </div>
     </div>
 </div>
+<div id="view-ai-chat" class="view-section hidden"></div>
 
 <div id="view-project-detail" class="view-section hidden" style="overflow:hidden;">
   <div style="display:flex; flex-direction:column; height:100%; min-height:0; padding:20px;">
@@ -1053,9 +1052,9 @@ window.SystemApps.rfq = {
                             <div id="quotes-breadcrumb" class="quotes-breadcrumb hidden">
                                 <button id="quotes-bc-home" class="btn-text" type="button">⬅ All Suppliers</button>
                                 <span class="quotes-bc-sep">›</span>
-                                <button id="quotes-bc-supplier" class="btn-text" type="button"></button>
+                                <span id="quotes-bc-supplier" class="quotes-bc-active"></span>
                                 <span id="quotes-bc-sep2" class="quotes-bc-sep hidden">›</span>
-                                <button id="quotes-bc-quote" class="btn-text hidden" type="button"></button>
+                                <span id="quotes-bc-quote" class="quotes-bc-active hidden"></span>
                             </div>
 
                             <!-- CONTENT AREA (dynamically swapped between 3 levels) -->
@@ -1184,47 +1183,6 @@ window.SystemApps.rfq = {
                                     </div>
                                 </div>
 
-
-                                <!-- Admin Management Section -->
-                                <div style="padding: 0 20px 20px 20px;">
-                                    <div class="sd-card" style="width: 100%;">
-                                        <div class="sd-card-title">Admin Management (Multi-tenant)</div>
-                                        <div style="font-size: 11px; color: #666; margin-bottom: 12px;">Manage users/roles and companies (superadmin).</div>
-                                        <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: 12px;">
-                                            <div>
-                                                <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Users</div>
-                                                <div id="settings-admin-users" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></div>
-                                            </div>
-                                            <div>
-                                                <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Companies</div>
-                                                <div id="settings-admin-companies" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></div>
-                                                <div style="display:flex; gap:8px; margin-top:8px;">
-                                                    <input id="settings-admin-company-name" class="rfq-input" placeholder="New company name" style="flex:1;" />
-                                                    <button id="btn-settings-admin-add-company" class="btn-secondary" type="button">Add</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div style="margin-top:10px;">
-                                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                                                <div>
-                                                    <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Audit Logs</div>
-                                                    <div style="display:flex; gap:8px; margin-bottom:6px;">
-                                                        <input id="settings-admin-audit-action" class="rfq-input" placeholder="Filter action" style="max-width:180px;" />
-                                                        <input id="settings-admin-audit-entity" class="rfq-input" placeholder="Filter entity" style="max-width:180px;" />
-                                                        <button id="btn-settings-admin-audit-refresh" class="btn-secondary" type="button">Refresh</button>
-                                                    </div>
-                                                    <div id="settings-admin-audit" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></div>
-                                                </div>
-                                                <div>
-                                                    <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Active Locks</div>
-                                                    <button id="btn-settings-admin-locks-refresh" class="btn-secondary" type="button" style="margin-bottom:6px;">Refresh Locks</button>
-                                                    <div id="settings-admin-locks" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:8px; background:#fff;"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div id="settings-admin-note" style="margin-top:8px; font-size:11px; color:#64748b;"></div>
-                                    </div>
-                                </div>
                                 <!-- Status Management Section (half width) -->
                                 <div style="padding: 0 20px 20px 20px;">
                                     <div class="sd-card" style="width: 50%; min-width: 400px;">
@@ -6629,12 +6587,8 @@ window.SystemApps.rfq = {
 
         function setProjectNameUI(name) {
             const label = name && String(name).trim() ? String(name).trim() : 'Select...';
-            const stamp = (window.RFQData && typeof window.RFQData.getProjectVersionStamp === 'function')
-                ? window.RFQData.getProjectVersionStamp(currentProject)
-                : (currentProject && (currentProject.server_updated_at || currentProject.updated_at || currentProject.data_version_stamp || ''));
-            const versionTxt = stamp ? ` • v:${String(stamp).slice(0, 19)}` : '';
             if (currentProjectName) currentProjectName.textContent = label;
-            if (topbarProjectName) topbarProjectName.textContent = `${label}${versionTxt}`;
+            if (topbarProjectName) topbarProjectName.textContent = label;
 
             // Fix: Re-render Document Tracking when project changes (data isolation)
             if (typeof window.renderDocumentTracking === 'function') {
@@ -6650,17 +6604,6 @@ window.SystemApps.rfq = {
         let supplierDetailCurrentName = '';
         let currentViewedSupplier = '';
         let itemDetailReturnView = 'items';
-
-        // Collaborative edit-lock state (item-detail first)
-        let __editLock = {
-            resourceKey: '',
-            projectId: '',
-            context: '',
-            heartbeatTimer: null,
-            readOnly: false,
-            ownerDisplay: '',
-            expiresAt: ''
-        };
 
         let selectedItems = new Set(); // Track selected item indices
 
@@ -6689,214 +6632,6 @@ window.SystemApps.rfq = {
             }
             return document.getElementById(id);
         };
-
-
-        function _forceRelogin(reason = 'session_expired') {
-            try {
-                window.__RFQ_AUTH_INVALID__ = true;
-                _clearEditLockTimers();
-                _itemDetailSetReadOnly(true, '⚠️ Your session expired or access changed. Please log in again.');
-            } catch (_) { }
-            if (window.showToast) window.showToast('Session expired. Please log in again.', 'error');
-            const next = encodeURIComponent(window.location.pathname + window.location.search + window.location.hash);
-            setTimeout(() => { window.location.href = `/login/?next=${next}&reason=${encodeURIComponent(reason)}`; }, 400);
-        }
-
-        async function _lockFetchJson(url, options = {}) {
-            const opts = {
-                method: options.method || 'GET',
-                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-                credentials: 'same-origin'
-            };
-            if (options.body !== undefined) opts.body = JSON.stringify(options.body);
-            const r = await fetch(url, opts);
-            let data = {};
-            try { data = await r.json(); } catch (_) { }
-            if (!r.ok) {
-                if (r.status === 401 || r.status === 403) _forceRelogin(r.status === 401 ? 'session_expired' : 'forbidden');
-                const err = new Error(data?.error || `HTTP ${r.status}`);
-                err.status = r.status;
-                err.data = data;
-                throw err;
-            }
-            return data;
-        }
-
-        try {
-            window.addEventListener('rfq:auth-invalidated', (ev) => {
-                const reason = ev && ev.detail && ev.detail.reason ? ev.detail.reason : 'session_expired';
-                _forceRelogin(reason);
-            });
-        } catch (_) { }
-
-        try {
-            window.addEventListener('rfq:project-reconciled', async (ev) => {
-                const pid = ev && ev.detail && ev.detail.projectId ? String(ev.detail.projectId) : '';
-                if (!pid || !currentProject || String(currentProject.id) !== pid) return;
-                try {
-                    const fresh = await fetch(`/api/projects/${encodeURIComponent(pid)}`, { credentials: 'same-origin' });
-                    if (fresh.ok) {
-                        const body = await fresh.json();
-                        if (body && body.project) {
-                            currentProject = body.project;
-                            if (window.showToast) window.showToast('Server version restored after lock conflict.', 'warning');
-                            renderCurrentView();
-                        }
-                    }
-                } catch (_) { }
-            });
-        } catch (_) { }
-
-        function _buildItemResourceKey(item, index) {
-            const pid = String(currentProject?.id || '');
-            const iid = String(item?.id || item?.item_drawing_no || item?.drawing_no || item?.mpn || index || '').trim();
-            return `project:${pid}:item:${iid}:view:item-detail`;
-        }
-
-        function _itemDetailSetReadOnly(on, message = '') {
-            const root = getEl('view-item-detail');
-            if (!root) return;
-            __editLock.readOnly = !!on;
-
-            const saveIds = ['btn-item-detail-save', 'btn-item-detail-save-back', 'btn-save-detail', 'btn-save-detail-no-close', 'btn-item-detail-delete'];
-            saveIds.forEach(id => {
-                const b = getEl(id);
-                if (b) b.disabled = !!on;
-            });
-
-            root.querySelectorAll('input, textarea, select, button').forEach(el => {
-                if (!on) {
-                    if (el.dataset && el.dataset.lockReadonly === '1') {
-                        el.disabled = false;
-                        delete el.dataset.lockReadonly;
-                    }
-                    return;
-                }
-
-                const id = el.id || '';
-                const safeIds = new Set(['btn-item-detail-back', 'btn-close-detail-window']);
-                if (safeIds.has(id)) return;
-
-                // Keep non-mutating nav clickable; disable mutating controls + form fields.
-                const isField = ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
-                const isSaveBtn = /save|delete|uložit|post|upload|add|create|import|export/i.test((el.textContent || '') + ' ' + id + ' ' + (el.className || ''));
-                if (isField || isSaveBtn) {
-                    if (el.dataset) el.dataset.lockReadonly = '1';
-                    el.disabled = true;
-                }
-            });
-
-            const bid = 'item-detail-lock-banner';
-            let banner = document.getElementById(bid);
-            if (on) {
-                if (!banner) {
-                    banner = document.createElement('div');
-                    banner.id = bid;
-                    banner.style.cssText = 'margin:8px 0; padding:10px 12px; border:1px solid #f59e0b; background:#fffbeb; color:#92400e; border-radius:8px; font-size:12px; font-weight:600;';
-                    const body = getEl('item-detail-page-body') || root;
-                    body.prepend(banner);
-                }
-                banner.textContent = message || '⚠️ Item is currently edited by another user. Read-only mode is active.';
-            } else if (banner) {
-                banner.remove();
-            }
-        }
-
-        function _clearEditLockTimers() {
-            if (__editLock.heartbeatTimer) {
-                clearInterval(__editLock.heartbeatTimer);
-                __editLock.heartbeatTimer = null;
-            }
-        }
-
-        async function _releaseEditLock() {
-            try {
-                const key = __editLock.resourceKey;
-                if (!key) return;
-                await _lockFetchJson('/api/locks/release', { method: 'POST', body: { resource_key: key } });
-            } catch (_) { }
-            finally {
-                _clearEditLockTimers();
-                __editLock.resourceKey = '';
-                __editLock.readOnly = false;
-                __editLock.ownerDisplay = '';
-                __editLock.expiresAt = '';
-                _itemDetailSetReadOnly(false);
-            }
-        }
-
-        async function _acquireGenericViewLock(context) {
-            if (!currentProject || !context) return;
-            const key = `project:${String(currentProject.id || '')}:view:${context}`;
-            __editLock.resourceKey = key;
-            __editLock.projectId = String(currentProject.id || '');
-            __editLock.context = String(context);
-            try {
-                const res = await _lockFetchJson('/api/locks/acquire', {
-                    method: 'POST',
-                    body: { resource_key: key, project_id: __editLock.projectId, context: String(context), ttl_sec: 180 }
-                });
-                if (!res?.acquired) {
-                    const owner = res?.owner?.display || 'another user';
-                    const until = res?.expires_at ? new Date(res.expires_at).toLocaleTimeString() : '';
-                    showToast(`View locked by ${owner}${until ? ` until ${until}` : ''}. Opened read-only mode.`, 'warning');
-                }
-            } catch (_) { }
-        }
-
-        async function _acquireItemDetailLock(item, index) {
-            if (!currentProject) return;
-            const key = _buildItemResourceKey(item, index);
-            __editLock.resourceKey = key;
-            __editLock.projectId = String(currentProject.id || '');
-            __editLock.context = 'item-detail';
-
-            try {
-                const res = await _lockFetchJson('/api/locks/acquire', {
-                    method: 'POST',
-                    body: {
-                        resource_key: key,
-                        project_id: __editLock.projectId,
-                        context: 'item-detail',
-                        ttl_sec: 180
-                    }
-                });
-
-                if (!res?.acquired) {
-                    const owner = res?.owner?.display || 'another user';
-                    const until = res?.expires_at ? new Date(res.expires_at).toLocaleTimeString() : '';
-                    const msg = `⚠️ This item is currently edited by ${owner}${until ? ` (until ${until})` : ''}. Read-only mode is active.`;
-                    __editLock.readOnly = true;
-                    __editLock.ownerDisplay = owner;
-                    __editLock.expiresAt = res?.expires_at || '';
-                    _itemDetailSetReadOnly(true, msg);
-                    return;
-                }
-
-                __editLock.readOnly = false;
-                _itemDetailSetReadOnly(false);
-                _clearEditLockTimers();
-                __editLock.heartbeatTimer = setInterval(async () => {
-                    try {
-                        const hb = await _lockFetchJson('/api/locks/heartbeat', {
-                            method: 'POST',
-                            body: { resource_key: key, ttl_sec: 180 }
-                        });
-                        if (!hb?.renewed) {
-                            _clearEditLockTimers();
-                            __editLock.readOnly = true;
-                            _itemDetailSetReadOnly(true, '⚠️ Your edit lock expired. Read-only mode is active. Reopen item detail to continue editing.');
-                            showToast('Edit lock expired — switched to read-only', 'warning');
-                        }
-                    } catch (_) {
-                        // do not spam toasts on transient network errors
-                    }
-                }, 60000);
-            } catch (e) {
-                console.warn('Lock acquire failed:', e);
-                // soft fallback: keep editable when lock service unavailable
-            }
-        }
 
         // Global formatMoney function that uses settings for decimal places
         const formatMoney = (n, forceDecimals) => {
@@ -9506,35 +9241,8 @@ window.SystemApps.rfq = {
         window.openAddBoxModal = openAddBoxModal;
         window.refreshCustomBoxes = refreshCustomBoxes;
 
-        function refreshCurrentContextAfterDataSync() {
-            try {
-                if (typeof getProjects === 'function') {
-                    projects = getProjects();
-                }
-                if (currentProject && currentProject.id) {
-                    const fresh = (projects || []).find(p => String(p.id) === String(currentProject.id));
-                    currentProject = fresh || null;
-                    window.currentProject = currentProject;
-                }
-                try { renderSidebar(); } catch (_) { }
-                try { renderSidebarProjects(); } catch (_) { }
-                if (typeof switchView === 'function' && currentView) {
-                    switchView(currentView);
-                }
-            } catch (e) {
-                console.warn('refreshCurrentContextAfterDataSync failed', e);
-            }
-        }
-
-        async function initApp() {
-            // Canonical bootstrap order: fetch server -> set in-memory -> render
-            try {
-                if (window.RFQData && typeof window.RFQData.bootstrapFromServer === 'function') {
-                    await window.RFQData.bootstrapFromServer();
-                }
-            } catch (e) { }
-
-            // Load projects from storage (already refreshed from server when reachable)
+        function initApp() {
+            // Load projects from storage
             if (typeof getProjects === 'function') {
                 projects = getProjects();
             }
@@ -9549,15 +9257,6 @@ window.SystemApps.rfq = {
             generateManualEntryForm();
             updateMenuTime();
             setInterval(updateMenuTime, 1000);
-            loadSessionInfo();
-
-            if (!window.__RFQ_DATA_SYNC_BOUND__) {
-                window.__RFQ_DATA_SYNC_BOUND__ = true;
-                window.addEventListener('rfq:data-updated', () => {
-                    refreshCurrentContextAfterDataSync();
-                });
-            }
-            try { refreshCurrentContextAfterDataSync(); } catch (e) { }
 
             // Initialize dashboard layout system
             try { initDashboardLayout(); } catch (e) { console.warn('Dashboard layout init:', e); }
@@ -9613,6 +9312,37 @@ window.SystemApps.rfq = {
             const btnOpenProjectPicker = getEl('btn-open-project-picker');
             const btnCloseProjectPicker = getEl('btn-close-project-picker'); // Leave
             const btnOkProjectPicker = getEl('btn-project-picker-ok'); // OK
+
+            if (!window.__RFQ_CONFLICT_HANDLER_BOUND__) {
+                window.__RFQ_CONFLICT_HANDLER_BOUND__ = true;
+                window.addEventListener('rfq:project-conflict', (ev) => {
+                    const detail = ev && ev.detail ? ev.detail : {};
+                    const projectId = String(detail.projectId || '');
+                    projects = (typeof getProjects === 'function') ? getProjects() : (projects || []);
+                    const canonical = projects.find(p => String(p && p.id) === projectId);
+                    if (canonical) {
+                        if (currentProject && String(currentProject.id) === projectId) {
+                            currentProject = canonical;
+                            window.currentProject = canonical;
+                            try { renderSidebar(); } catch (e) { }
+                            try { switchView(currentView || 'dashboard'); } catch (e) { }
+                        } else {
+                            try { renderSidebar(); } catch (e) { }
+                        }
+                    }
+                    if (window.showToast) {
+                        window.showToast(detail.message || 'Conflict detected. Loaded latest server data.', 'warning');
+                    }
+                });
+
+                window.addEventListener('rfq:project-lock-required', (ev) => {
+                    const blocked = (ev && ev.detail && Array.isArray(ev.detail.blockedProjectIds)) ? ev.detail.blockedProjectIds : [];
+                    if (!blocked.length) return;
+                    if (window.showToast) {
+                        window.showToast('Project Data lock required. Save blocked until lock is acquired.', 'warning');
+                    }
+                });
+            }
 
             const openProjectPicker = () => {
                 if (!projectPicker) return;
@@ -10190,10 +9920,6 @@ window.SystemApps.rfq = {
         }
 
         function switchView(view) {
-            const prevView = currentView;
-            if (prevView === 'item-detail' && view !== 'item-detail') {
-                try { _releaseEditLock(); } catch (_) { }
-            }
             currentView = view;
 
             // Close any open dropdowns
@@ -10244,13 +9970,7 @@ window.SystemApps.rfq = {
 
                 viewMain.classList.remove('hidden');
                 if (navMain) navMain.classList.add('active');
-                try {
-                    const mf = getEl('main-filter');
-                    const ms = getEl('main-status-filter');
-                    if (mf) mf.value = '';
-                    if (ms) ms.value = '';
-                    renderMainOverview();
-                } catch (e) { console.error(e); const me = getEl('main-error'); if (me) { me.textContent = 'MAIN render error: ' + (e && e.message ? e.message : String(e)); me.classList.remove('hidden'); } }
+                try { renderMainOverview(); } catch (e) { console.error(e); const me = getEl('main-error'); if (me) { me.textContent = 'MAIN render error: ' + (e && e.message ? e.message : String(e)); me.classList.remove('hidden'); } }
             } else if (view === 'data' && viewDataManager) {
                 viewDataManager.classList.remove('hidden');
                 if (navData) navData.classList.add('active');
@@ -10274,13 +9994,11 @@ window.SystemApps.rfq = {
                 updateSupplierFilter();
                 updateManufacturerFilter();
             } else if (view === 'suppliers' && viewSuppliers) {
-                try { _acquireGenericViewLock('suppliers'); } catch (_) { }
                 viewSuppliers.classList.remove('hidden');
                 if (navSuppliers) navSuppliers.classList.add('active');
                 highlightDropdownParent('nav-dropdown-project');
                 if (typeof renderSuppliers === 'function') renderSuppliers();
             } else if (view === 'project-suppliers' && viewProjectSuppliers) {
-                try { _acquireGenericViewLock('project-suppliers'); } catch (_) { }
                 viewProjectSuppliers.classList.remove('hidden');
                 if (navProjectSuppliers) navProjectSuppliers.classList.add('active');
                 highlightDropdownParent('nav-dropdown-project');
@@ -10317,7 +10035,6 @@ window.SystemApps.rfq = {
                 viewItemDetail.classList.remove('hidden');
                 // No nav tab is active for detail pages
             } else if (view === 'quoting' && viewQuoting) {
-                try { _acquireGenericViewLock('quoting'); } catch (_) { }
                 viewQuoting.classList.remove('hidden');
                 if (navQuoting) navQuoting.classList.add('active');
                 renderQuotingView();
@@ -10614,12 +10331,6 @@ window.SystemApps.rfq = {
             const errEl = getEl('main-error');
             if (errEl) { errEl.textContent = ''; errEl.classList.add('hidden'); }
 
-            // Safety: always show core main boxes (users may accidentally hide them in layout edit mode)
-            ['main-kpis','main-projects-table-box','main-countdown','main-top-suppliers'].forEach(id => {
-                const bx = document.querySelector(`.main-box[data-box-id="${id}"]`);
-                if (bx) bx.classList.remove('hidden-box');
-            });
-
             // Bind action buttons (re-bind each time to ensure they work)
             const btnMainRefresh = getEl('btn-main-refresh');
             const btnMainExport = getEl('btn-main-export');
@@ -10638,13 +10349,7 @@ window.SystemApps.rfq = {
                 btnMainNewProject.onclick = () => { try { openNewProjectModal(); } catch (e) { console.error(e); } };
             }
 
-            const freshProjects = getAllProjectsSafe();
-            // Resilience: if provider temporarily returns empty, keep in-memory list
-            if (Array.isArray(freshProjects) && freshProjects.length) {
-                projects = freshProjects;
-            } else if (!Array.isArray(projects)) {
-                projects = [];
-            }
+            projects = getAllProjectsSafe();
 
             const list = Array.isArray(projects) ? projects : [];
             const tb = getEl('main-projects-tbody');
@@ -16621,119 +16326,65 @@ Best regards`)}</textarea>
         <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     `;
 
-            setTimeout(async () => {
-                try {
-                    await _renderPriceFinderContent(container);
-                } catch (err) {
-                    console.error("Price Finder load failed:", err);
-                    container.innerHTML = `<div style="padding:24px; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; color:#991b1b;">Price Finder failed to load quotes data. Please try Refresh.</div>`;
-                }
-            }, 30);
+            setTimeout(() => _renderPriceFinderContent(container), 30);
         }
 
-        async function _renderPriceFinderContent(container) {
+        function _renderPriceFinderContent(container) {
             const items = currentProject.items || [];
+            const findDuplicates = window.RFQData?.findDuplicateParts || (() => []);
             const rates = window.RFQData?.getExchangeRates?.() || { EUR: 1, USD: 0.92, CZK: 0.04 };
 
-            const _n = (v) => String(v || '').trim().toLowerCase();
-            const _num = (v) => {
-                const n = parseFloat(v);
-                return Number.isFinite(n) ? n : 0;
-            };
-
-            // Collect all matches with pricing data FROM QUOTES DB
+            // Collect all matches with pricing data
             const results = [];
 
-            // 1) Load quotes index
-            const idxRes = await _qFetchJson('/api/quotes/?limit=500&offset=0', { method: 'GET' });
-            const quoteIndex = (idxRes && idxRes.quotes) ? idxRes.quotes : [];
-
-            // 2) Load quote details (with lines) for all quotes outside current project
-            const quoteDetails = [];
-            for (const q of quoteIndex) {
-                if (!q || !q.id) continue;
-                if (String(q.project_id || '') === String(currentProject.id || '')) continue;
-                try {
-                    const det = await _qFetchJson(`/api/quotes/${q.id}/`, { method: 'GET' });
-                    if (det && det.quote) quoteDetails.push(det.quote);
-                } catch (e) {
-                    console.warn('PriceFinder: failed to load quote detail', q.id, e);
-                }
-            }
-
-            // 3) Match current project items to quote lines by drawing_no / mpn
             items.forEach((item, itemIdx) => {
                 const dn = item.item_drawing_no || item.drawing_no || '';
                 const mpn = item.mpn || '';
                 if (!dn && !mpn) return;
 
-                const dnKey = _n(dn);
-                const mpnKey = _n(mpn);
+                const matches = findDuplicates(dn, mpn, currentProject.id);
+                if (!matches.length) return;
+
                 const ourQty = parseFloat(item.qty_1) || 1;
                 const hasCurrentQuote = (item.suppliers || []).some(s => parseFloat(s.price_1 || s.price) > 0);
 
+                // Collect quotes from matched projects
                 const quotes = [];
-                const seen = new Set();
+                matches.forEach(m => {
+                    const mi = m.item;
+                    const sourceQty = parseFloat(mi.qty_1) || 1; // QTY from source project
+                    (mi.suppliers || []).forEach(sup => {
+                        const p = parseFloat(sup.price_1 || sup.price) || 0;
+                        if (p <= 0) return;
 
-                quoteDetails.forEach(qd => {
-                    const lines = Array.isArray(qd.lines) ? qd.lines : [];
-                    lines.forEach(ln => {
-                        const ldn = _n(ln.drawing_number || ln.item_drawing_no || ln.drawing_no);
-                        const lmpn = _n(ln.mpn);
-                        if (!(dnKey && ldn && dnKey === ldn) && !(mpnKey && lmpn && mpnKey === lmpn)) return;
-
-                        // base price: prefer price_1, fallback first available tier
-                        let basePrice = _num(ln.price_1);
-                        if (!basePrice) {
-                            for (let i = 2; i <= 10; i++) {
-                                const p = _num(ln[`price_${i}`]);
-                                if (p > 0) { basePrice = p; break; }
-                            }
-                        }
-                        if (basePrice <= 0) return;
-
-                        const cur = String(qd.currency || 'EUR').toUpperCase();
-                        const eur = basePrice * (rates[cur] || 1);
-
-                        const allPrices = [];
-                        for (let i = 1; i <= 10; i++) {
-                            const qv = ln[`qty_${i}`];
-                            const pv = ln[`price_${i}`];
-                            if (qv && pv !== null && pv !== undefined && String(pv).trim() !== '') {
-                                allPrices.push({ qty: qv, price: pv, index: i });
-                            }
-                        }
-
-                        const sourceQty = _num(ln.qty_1) || 1;
-                        const supplier = qd.supplier_name || 'Unknown';
-                        const dedupKey = `${qd.id}|${supplier}|${ln.line_number || ln.id || ldn || lmpn}`;
-                        if (seen.has(dedupKey)) return;
-                        seen.add(dedupKey);
+                        const cur = (sup.currency || 'EUR').toUpperCase();
+                        const eur = p * (rates[cur] || 1);
 
                         quotes.push({
-                            projectId: qd.project_id,
-                            projectName: qd.project_name || '',
-                            matchType: (dnKey && ldn && dnKey === ldn) ? 'drawing_no' : 'mpn',
-                            matchedDn: ln.drawing_number || '',
-                            matchedMpn: ln.mpn || '',
-                            sourceQty: sourceQty,
-                            supplier: supplier,
-                            email: '',
-                            quoteNo: qd.quote_number || '',
-                            quoteDate: qd.create_date || '',
-                            validUntil: qd.expire_date || '',
-                            price: basePrice,
+                            projectId: m.projectId,
+                            projectName: m.projectName,
+                            matchType: m.matchType,
+                            matchedDn: mi.item_drawing_no || mi.drawing_no || '',
+                            matchedMpn: mi.mpn || '',
+                            sourceQty: sourceQty, // QTY in the source project
+                            supplier: sup.name || '?',
+                            email: sup.email || '',
+                            quoteNo: sup.quote_no || sup.quoteNo || '',
+                            quoteDate: sup.quoted_date || sup.quote_date || '',
+                            validUntil: sup.valid_until || sup.validity || '',
+                            price: p,
                             currency: cur,
                             priceEur: eur,
-                            leadTime: ln.supplier_lead_time || ln.manufacturing_lead_time || '',
-                            moq: ln.moq || '',
-                            incoterms: qd.incoterm || qd.incoterms || '',
-                            allPrices: allPrices
+                            leadTime: sup.lead_time || '',
+                            moq: sup.moq || '',
+                            incoterms: sup.incoterms || '',
+                            allPrices: sup.prices || []
                         });
                     });
                 });
 
                 if (quotes.length === 0) return;
+
                 quotes.sort((a, b) => a.priceEur - b.priceEur);
 
                 results.push({
@@ -16747,6 +16398,7 @@ Best regards`)}</textarea>
                     bestEur: quotes[0].priceEur
                 });
             });
+
             // Statistics
             const needQuote = results.filter(r => !r.hasCurrentQuote);
             const suppliers = [...new Set(results.flatMap(r => r.quotes.map(q => q.supplier)))];
@@ -18293,80 +17945,6 @@ Best regards`)}</textarea>
             if (top) top.textContent = txt;
         }
 
-        async function loadSessionInfo() {
-            try {
-                const res = await fetch('/api/session/me', { credentials: 'same-origin' });
-                if (!res.ok) return;
-                const data = await res.json();
-
-                // Session safety: prevent cross-user local cache leak in shared browser
-                try {
-                    const sessionKey = `${data.user_id || ''}:${data.username || ''}:${data.company_id || ''}:${data.role || ''}`;
-                    window.__RFQ_SESSION_SCOPE__ = sessionKey;
-                    const prevKey = localStorage.getItem('rfq_last_session_key');
-                    if (prevKey && prevKey !== sessionKey) {
-                        localStorage.removeItem('rfq_projects_v1');
-                        localStorage.removeItem('rfq_active_project_id');
-                        localStorage.removeItem('rfq_current_view_state');
-                        localStorage.removeItem('rfq_main_projects_page');
-                        localStorage.setItem('rfq_last_session_key', sessionKey);
-                        location.reload();
-                        return;
-                    }
-                    localStorage.setItem('rfq_last_session_key', sessionKey);
-                } catch (e) { }
-
-                try {
-                    if (window.RFQData && typeof window.RFQData.bootstrapFromServer === 'function') {
-                        await window.RFQData.bootstrapFromServer();
-                        projects = (window.RFQData.getProjects && window.RFQData.getProjects()) || projects;
-                        refreshCurrentContextAfterDataSync();
-                    }
-                } catch (e) { }
-
-                const topUser = document.getElementById('topbar-user');
-                if (topUser && data) {
-                    const role = data.role ? ` (${data.role})` : '';
-                    const scoped = data.scope_company_name ? ` • scoped: ${data.scope_company_name}` : (data.company_name ? ` • ${data.company_name}` : '');
-                    topUser.textContent = `👤 ${data.username || 'user'}${role}${scoped}`;
-                }
-                const mega = document.getElementById('topbar-mega-link');
-                if (mega && (data.is_superadmin || data.is_management)) {
-                    mega.style.display = 'inline';
-                }
-
-                const scopeSel = document.getElementById('topbar-company-scope');
-                if (scopeSel && data.is_superadmin) {
-                    const companies = Array.isArray(data.companies) ? data.companies : [];
-                    scopeSel.innerHTML = `<option value='all'>All companies</option>` + companies.map(c => `<option value='${c.id}'>${String(c.name || '').replace(/[<>&"']/g, '')}</option>`).join('');
-                    scopeSel.value = data.scope_company_id || 'all';
-                    scopeSel.style.display = 'inline-block';
-                    scopeSel.onchange = async () => {
-                        try {
-                            const v = scopeSel.value || 'all';
-                            const r = await fetch('/api/session/switch_company', {
-                                method: 'POST',
-                                credentials: 'same-origin',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ company_id: v })
-                            });
-                            const jr = await r.json().catch(() => ({}));
-                            if (!r.ok) throw new Error(jr.error || 'Switch failed');
-                            try {
-                                localStorage.removeItem('rfq_projects_v1');
-                                localStorage.removeItem('rfq_active_project_id');
-                                localStorage.removeItem('rfq_current_view_state');
-                                localStorage.removeItem('rfq_main_projects_page');
-                            } catch (e) { }
-                            location.reload();
-                        } catch (e) {
-                            console.warn('Company switch failed', e);
-                        }
-                    };
-                }
-            } catch (e) { }
-        }
-
         function renderSuppliers() {
             if (!currentProject || !currentProject.items) {
                 getEl('bulk-pricing-empty').classList.remove('hidden');
@@ -19024,7 +18602,6 @@ Best regards`)}</textarea>
                 if (isNaN(index)) return;
 
                 const item = currentProject.items[index];
-            try { _acquireItemDetailLock(item, index); } catch (_) { }
                 ensureItemShape(item);
                 if (!item) return;
 
@@ -20225,205 +19802,6 @@ Best regards`)}</textarea>
         // =========================================================
         // Settings - Currency Rates and Display Settings
         // =========================================================
-        async function _settingsFetchJson(url, options = {}) {
-            const opts = {
-                method: options.method || 'GET',
-                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-                credentials: 'same-origin'
-            };
-            if (options.body !== undefined) opts.body = JSON.stringify(options.body);
-            const r = await fetch(url, opts);
-            let data = {};
-            try { data = await r.json(); } catch (_) { }
-            if (!r.ok) {
-                if (r.status === 401 || r.status === 403) _forceRelogin(r.status === 401 ? 'session_expired' : 'forbidden');
-                const err = new Error(data?.error || `HTTP ${r.status}`);
-                err.status = r.status;
-                err.data = data;
-                throw err;
-            }
-            return data;
-        }
-
-        async function renderAdminManagement() {
-            const usersEl = getEl('settings-admin-users');
-            const compEl = getEl('settings-admin-companies');
-            const noteEl = getEl('settings-admin-note');
-            const addBtn = getEl('btn-settings-admin-add-company');
-            const addInput = getEl('settings-admin-company-name');
-            if (!usersEl || !compEl) return;
-
-            usersEl.innerHTML = '<div style="padding:10px; font-size:11px; color:#64748b;">Loading...</div>';
-            compEl.innerHTML = '<div style="padding:10px; font-size:11px; color:#64748b;">Loading...</div>';
-            if (noteEl) noteEl.textContent = '';
-
-            let users = [];
-            let companies = [];
-
-            try {
-                const ur = await _settingsFetchJson('/api/admin/users');
-                users = Array.isArray(ur?.users) ? ur.users : [];
-            } catch (e) {
-                usersEl.innerHTML = '<div style="padding:10px; font-size:11px; color:#b91c1c;">Admin users unavailable.</div>';
-                if (noteEl) noteEl.textContent = `Admin API: ${e.message}`;
-                return;
-            }
-
-            try {
-                const cr = await _settingsFetchJson('/api/admin/companies');
-                companies = Array.isArray(cr?.companies) ? cr.companies : [];
-            } catch (_) {
-                companies = [];
-            }
-
-            usersEl.innerHTML = users.length ? users.map(u => {
-                const roleColor = u.role === 'superadmin' ? '#7c3aed' : (u.role === 'admin' ? '#0f766e' : (u.role === 'editor' ? '#1d4ed8' : '#475569'));
-                const companyOptions = companies.map(c => `<option value="${c.id}" ${String(u.company_id||'')===String(c.id)?'selected':''}>${escapeHtml(c.name||'')}</option>`).join('');
-                return `<div style="padding:8px 10px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
-                    <div style="min-width:0; flex:1;">
-                        <div style="font-size:12px; font-weight:600; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(u.username || ('#'+u.user_id))}</div>
-                        <div style="font-size:10px; color:#64748b;">${escapeHtml(u.email || '')} ${u.company_name ? '• '+escapeHtml(u.company_name) : ''}</div>
-                    </div>
-                    <div style="display:grid; grid-template-columns:auto auto auto auto; gap:6px; align-items:center;">
-                        <select data-admin-user-role="${u.user_id}" class="rfq-input" style="font-size:11px; padding:2px 6px; color:${roleColor}; min-width:90px;">
-                            ${['viewer','editor','admin','superadmin'].map(r => `<option value="${r}" ${u.role===r?'selected':''}>${r}</option>`).join('')}
-                        </select>
-                        <label style="font-size:10px; color:#475569; display:flex; align-items:center; gap:4px;"><input type="checkbox" data-admin-user-mgmt="${u.user_id}" ${u.is_management?'checked':''}/> mgmt</label>
-                        <select data-admin-user-company="${u.user_id}" class="rfq-input" style="font-size:11px; padding:2px 6px; min-width:120px;">
-                            <option value="">(none)</option>${companyOptions}
-                        </select>
-                        <button class="btn-secondary" data-admin-user-save="${u.user_id}" style="font-size:10px; padding:3px 8px;">Save</button>
-                    </div>
-                </div>`;
-            }).join('') : '<div style="padding:10px; font-size:11px; color:#64748b;">No users.</div>';
-
-            compEl.innerHTML = companies.length ? companies.map(c => `<div style="padding:8px 10px; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center;">
-                <div style="font-size:12px; font-weight:600; color:#0f172a;">${escapeHtml(c.name || '')}</div>
-                <div style="font-size:10px; color:${c.is_active ? '#16a34a' : '#dc2626'};">${c.is_active ? 'active' : 'inactive'}</div>
-            </div>`).join('') : '<div style="padding:10px; font-size:11px; color:#64748b;">Companies visible only for superadmin.</div>';
-
-            usersEl.querySelectorAll('[data-admin-user-save]').forEach(btn => {
-                btn.onclick = async () => {
-                    const uid = btn.getAttribute('data-admin-user-save');
-                    const sel = usersEl.querySelector(`[data-admin-user-role="${uid}"]`);
-                    const role = sel ? sel.value : 'viewer';
-                    const mg = usersEl.querySelector(`[data-admin-user-mgmt="${uid}"]`);
-                    const co = usersEl.querySelector(`[data-admin-user-company="${uid}"]`);
-                    try {
-                        await _settingsFetchJson('/api/admin/users', {
-                            method: 'POST',
-                            body: {
-                                user_id: Number(uid),
-                                role,
-                                is_management: !!(mg && mg.checked),
-                                company_id: co ? co.value : null,
-                            }
-                        });
-                        showToast('User updated', 'success');
-                        renderAdminManagement();
-                    } catch (e) {
-                        showToast(`Update failed: ${e.message}`, 'error');
-                    }
-                };
-            });
-
-            if (addBtn && !addBtn.dataset.bound) {
-                addBtn.dataset.bound = '1';
-                addBtn.onclick = async () => {
-                    const name = String(addInput?.value || '').trim();
-                    if (!name) { showToast('Enter company name', 'warning'); return; }
-                    try {
-                        await _settingsFetchJson('/api/admin/companies', { method: 'POST', body: { name } });
-                        if (addInput) addInput.value = '';
-                        showToast('Company created', 'success');
-                        renderAdminManagement();
-                    } catch (e) {
-                        showToast(`Create failed: ${e.message}`, 'error');
-                    }
-                };
-            }
-
-            const auditWrap = getEl('settings-admin-audit');
-            const auditAction = getEl('settings-admin-audit-action');
-            const auditEntity = getEl('settings-admin-audit-entity');
-            const auditBtn = getEl('btn-settings-admin-audit-refresh');
-
-            const lockWrap = getEl('settings-admin-locks');
-            const lockBtn = getEl('btn-settings-admin-locks-refresh');
-
-            const loadLocks = async () => {
-                if (!lockWrap) return;
-                lockWrap.innerHTML = '<div style="padding:10px; font-size:11px; color:#64748b;">Loading...</div>';
-                try {
-                    const lr = await _settingsFetchJson('/api/admin/locks?limit=200');
-                    const locks = Array.isArray(lr?.locks) ? lr.locks : [];
-                    lockWrap.innerHTML = locks.length ? locks.map(l => `
-                        <div style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:11px;">
-                            <div style="display:flex; justify-content:space-between; gap:8px;">
-                                <div style="font-weight:600; color:#0f172a;">${escapeHtml(l.context || 'lock')}</div>
-                                <div style="color:#64748b;">${escapeHtml((l.expires_at || '').replace('T',' ').slice(0,19))}</div>
-                            </div>
-                            <div style="color:#475569;">${escapeHtml(l.project_name || l.project_id || '')} • ${escapeHtml(l.locked_by || '')}</div>
-                            <div style="margin-top:4px;"><button class="btn-secondary" data-admin-force-unlock="${escapeAttr(l.resource_key || '')}" style="font-size:10px; padding:2px 6px;">Force unlock</button></div>
-                        </div>
-                    `).join('') : '<div style="padding:10px; font-size:11px; color:#64748b;">No active locks.</div>';
-
-                    lockWrap.querySelectorAll('[data-admin-force-unlock]').forEach(b => {
-                        b.onclick = async () => {
-                            const key = b.getAttribute('data-admin-force-unlock');
-                            if (!key) return;
-                            try {
-                                await _settingsFetchJson('/api/locks/force_unlock', { method: 'POST', body: { resource_key: key } });
-                                showToast('Lock unlocked', 'success');
-                                loadLocks();
-                            } catch (e) {
-                                showToast(`Unlock failed: ${e.message}`, 'error');
-                            }
-                        };
-                    });
-                } catch (e) {
-                    lockWrap.innerHTML = '<div style="padding:10px; font-size:11px; color:#b91c1c;">Locks unavailable.</div>';
-                }
-            };
-
-            if (lockBtn && !lockBtn.dataset.bound) {
-                lockBtn.dataset.bound = '1';
-                lockBtn.onclick = loadLocks;
-            }
-
-            const loadAudit = async () => {
-                if (!auditWrap) return;
-                auditWrap.innerHTML = '<div style="padding:10px; font-size:11px; color:#64748b;">Loading...</div>';
-                try {
-                    const q = new URLSearchParams({
-                        limit: '120',
-                        action: String(auditAction?.value || '').trim(),
-                        entity_type: String(auditEntity?.value || '').trim(),
-                    });
-                    const ar = await _settingsFetchJson(`/api/admin/audit_logs?${q.toString()}`);
-                    const logs = Array.isArray(ar?.logs) ? ar.logs : [];
-                    auditWrap.innerHTML = logs.length ? logs.map(l => `
-                        <div style="padding:7px 10px; border-bottom:1px solid #f1f5f9; font-size:11px;">
-                            <div style="display:flex; justify-content:space-between; gap:8px;">
-                                <div style="font-weight:600; color:#0f172a;">${escapeHtml(l.action || '')}</div>
-                                <div style="color:#64748b;">${escapeHtml((l.time || '').replace('T',' ').slice(0,19))}</div>
-                            </div>
-                            <div style="color:#475569;">${escapeHtml(l.entity_type || '')} • ${escapeHtml(String(l.entity_id || ''))} • ${escapeHtml(l.actor || '')}</div>
-                        </div>
-                    `).join('') : '<div style="padding:10px; font-size:11px; color:#64748b;">No logs.</div>';
-                } catch (e) {
-                    auditWrap.innerHTML = '<div style="padding:10px; font-size:11px; color:#b91c1c;">Audit log unavailable.</div>';
-                }
-            };
-
-            if (auditBtn && !auditBtn.dataset.bound) {
-                auditBtn.dataset.bound = '1';
-                auditBtn.onclick = loadAudit;
-            }
-            loadAudit();
-            loadLocks();
-        }
-
         function renderSettings() {
             const ratesContainer = getEl('settings-currency-rates');
             const decimalsSelect = getEl('settings-currency-decimals');
@@ -20668,7 +20046,6 @@ Best regards`)}</textarea>
             // Status Management UI
             // =========================================================
             initStatusManagementUI();
-            try { renderAdminManagement(); } catch (e) { console.warn('Admin settings render failed', e); }
         }
 
         // Current status type being edited
@@ -22229,13 +21606,7 @@ Best regards`)}</textarea>
             projectPickerIsOpen = false;
             projectPickerPendingId = null;
             localStorage.setItem('rfq_active_project_id', project.id);
-            // Do NOT mutate/persist on project switch; server bootstrap remains canonical.
-            try {
-                const q = JSON.parse(localStorage.getItem('rfq_sync_queue_v1') || '[]');
-                if (!Array.isArray(q) || q.length === 0) {
-                    localStorage.removeItem(`rfq_project_draft_v1_${String(project.id)}`);
-                }
-            } catch (e) { }
+            if (typeof updateProject === 'function') updateProject(currentProject);
             setProjectNameUI(project.name);
             renderSidebar();
 
@@ -22251,7 +21622,6 @@ Best regards`)}</textarea>
 
             // Always switch to dashboard when project is selected
             switchView('dashboard');
-            try { refreshCurrentContextAfterDataSync(); } catch (e) { }
         }
 
 
@@ -24911,7 +24281,6 @@ Best regards`)}</textarea>
             const wasDetailView = (currentView === 'item-detail') || isDetailVisible;
 
             currentDetailIndex = null;
-            try { _releaseEditLock(); } catch (_) { }
 
             if (wasDetailView) {
                 const ret = itemDetailReturnView || 'items';
@@ -31252,6 +30621,8 @@ Best regards`)}</textarea>
 
                             // DEBUG: Log quote number data
                             if (supName === '1265') {
+                                console.log('[DEBUG Quote] Supplier 1265, sq object:', sq);
+                                console.log('[DEBUG Quote] quoteNum extracted:', quoteNum);
                             }
 
                             allSuppliersForItem.set(supName, {
@@ -32184,18 +31555,27 @@ Best regards`)}</textarea>
 
         // Send loser notification - open modal with custom text and ODF generation
         window.sendLoserNotification = function (supplierName) {
+            console.log('[DEBUG] sendLoserNotification called with:', supplierName);
+            console.log('[DEBUG] Type of supplierName:', typeof supplierName);
+            console.log('[DEBUG] wrapper exists:', !!window.fsState);
+            console.log('[DEBUG] nonAwardedData exists:', !!(window.fsState && window.fsState.nonAwardedData));
 
             if (window.fsState && window.fsState.nonAwardedData) {
+                console.log('[DEBUG] nonAwardedData keys:', Array.from(window.fsState.nonAwardedData.keys()));
             }
 
             let data = window.fsState.nonAwardedData?.get(supplierName);
+            console.log('[DEBUG] Direct lookup result:', data ? 'found' : 'not found');
 
             // Robust lookup: Try case-insensitive and trimmed match
             if (!data && window.fsState.nonAwardedData) {
                 const target = String(supplierName).trim().toLowerCase();
+                console.log('[DEBUG] Trying fuzzy match for:', target);
                 for (const [key, val] of window.fsState.nonAwardedData.entries()) {
                     const keyNorm = String(key).trim().toLowerCase();
+                    console.log(`[DEBUG] Comparing '${keyNorm}' with '${target}'`);
                     if (keyNorm === target) {
+                        console.log('[DEBUG] Fuzzy match found:', key);
                         data = val;
                         break;
                     }
@@ -32203,6 +31583,7 @@ Best regards`)}</textarea>
             }
 
             if (!data || data.items.length === 0) {
+                console.error('[DEBUG] No data found! supplierName:', supplierName, 'data:', data);
                 // Dump all keys for debugging
                 if (window.fsState && window.fsState.nonAwardedData) {
                     window.fsState.nonAwardedData.forEach((v, k) => {
@@ -32214,6 +31595,7 @@ Best regards`)}</textarea>
                 return;
             }
 
+            console.log('[DEBUG] Data found, items count:', data.items.length);
 
             const modal = document.createElement('div');
             modal.id = 'loser-notification-modal';
@@ -41025,6 +40407,7 @@ window.RFQStandalone.mount = function (rootSelectorOrEl) {
 
 /* ===================== v58 Deep Wizard Stability Patch (plus DATA Manager) ===================== */
 (function () {
+    try { window.__RFQ_BUILD_VERSION__ = 'v64_4'; } catch (e) { }
     // Guard: only patch once
     if (window.__RFQ_V58_WIZ_PATCH__) return;
     window.__RFQ_V58_WIZ_PATCH__ = true;
@@ -42150,6 +41533,59 @@ document.addEventListener('click', function (e) {
 
         // Also remove active class from doc manager btn
         const btn = document.getElementById('nav-doc-manager');
+        if (btn) btn.classList.remove('active');
+    }
+});
+
+// ===================================
+// AI Chat Bot Integration
+// ===================================
+document.addEventListener('click', function (e) {
+    if (e.target && (e.target.id === 'nav-ai-chat' || e.target.closest('#nav-ai-chat'))) {
+        // Reset project when going to GLOBAL view
+        currentProject = null;
+        window.currentProject = null;
+        localStorage.removeItem('rfq_active_project_id');
+        if (typeof setProjectNameUI === 'function') setProjectNameUI(null);
+        const ptg = document.querySelector('.project-tabs-group');
+        if (ptg) ptg.classList.remove('has-project');
+
+        // Switch View
+        document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+        const view = document.getElementById('view-ai-chat');
+        if (view) view.classList.remove('hidden');
+
+        // Update Sidebar Active State
+        document.querySelectorAll('.nav-dropdown-item').forEach(el => el.classList.remove('active'));
+        const btn = document.getElementById('nav-ai-chat');
+        if (btn) btn.classList.add('active');
+
+        // Dynamic Script Loading
+        if (!window.RFQChat) {
+            if (window.showToast) window.showToast('Loading AI module...', 'info');
+            const script = document.createElement('script');
+            // Assuming the standard static path structure
+            script.src = '/static/rfq/rfq_chat.js?v=' + new Date().getTime();
+            script.onload = () => {
+                if (window.RFQChat) window.RFQChat.init();
+                if (window.showToast) window.showToast('AI Ready', 'success');
+            };
+            script.onerror = () => {
+                if (window.showToast) window.showToast('Failed to load AI module', 'error');
+                if (view) view.innerHTML = '<div style="padding:20px; color:red;">Error loading AI Chat module. Check console for path errors.</div>';
+            };
+            document.body.appendChild(script);
+        } else {
+            window.RFQChat.renderInterface();
+        }
+    }
+
+    // Auto-hide when leaving
+    const navItem = e.target.closest('.nav-item, .nav-dropdown-item, .tab, .nav-dropdown-btn');
+    if (navItem && navItem.id !== 'nav-ai-chat') {
+        const view = document.getElementById('view-ai-chat');
+        if (view) view.classList.add('hidden');
+        const btn = document.getElementById('nav-ai-chat');
         if (btn) btn.classList.remove('active');
     }
 });
@@ -43420,10 +42856,7 @@ window._showGenerateConfigModal = function(supplierNames, isBulk) {
                         instruction_message: instructionMessage, valid_until: validUntil
                     })
                 });
-                if (!res.ok) {
-                    const errText = await res.text();
-                    throw new Error(`API Error ${res.status}: ${errText || 'bulk_generate failed'}`);
-                }
+                if (!res.ok) throw new Error('API Error');
                 const json = await res.json();
                 window.closeRfqModal();
                 window.showAlert(`${json.count} portal link(s) generated successfully.`);
@@ -43439,24 +42872,13 @@ window._showGenerateConfigModal = function(supplierNames, isBulk) {
                         instruction_message: instructionMessage, valid_until: validUntil
                     })
                 });
-                if (!res.ok) {
-                    const errText = await res.text();
-                    throw new Error(`API Error ${res.status}: ${errText || 'generate failed'}`);
-                }
+                if (!res.ok) throw new Error('API Error');
                 const json = await res.json();
                 if (json.access && json.access.id) {
                     const link = `${location.origin}/portal/${json.access.id}/`;
                     window.closeRfqModal();
-
-                    const canClipboard = !!(navigator && navigator.clipboard && navigator.clipboard.writeText);
-                    if (canClipboard) {
-                        navigator.clipboard.writeText(link).catch(() => {});
-                        window.showAlert(`Portal link generated for ${sName}. Link copied to clipboard.`);
-                    } else {
-                        // HTTP / non-secure context fallback
-                        window.showAlert(`Portal link generated for ${sName}: ${link}`);
-                    }
-
+                    window.showAlert(`Portal link generated for ${sName}. Link copied to clipboard.`);
+                    navigator.clipboard.writeText(link).catch(() => {});
                     window.renderSupplierInteraction();
                 }
             }
@@ -43464,8 +42886,7 @@ window._showGenerateConfigModal = function(supplierNames, isBulk) {
             console.error(e);
             btn.disabled = false;
             btn.innerHTML = `Generate Link${isBulk ? 's' : ''}`;
-            const msg = (e && e.message) ? e.message : 'Error generating link. Please try again.';
-            window.showAlert(`Error generating link: ${msg}`);
+            window.showAlert('Error generating link. Please try again.');
         }
     };
 };
@@ -43523,16 +42944,12 @@ window.reopenSupplierAccess = async function(tokenId) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }
             });
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(`API Error ${res.status}: ${errText || 'reopen failed'}`);
-            }
+            if (!res.ok) throw new Error('API Error');
             window.showAlert('Portal reopened.');
             window.renderSupplierInteraction();
         } catch (e) {
             console.error(e);
-            const msg = (e && e.message) ? e.message : 'Error reopening portal.';
-            window.showAlert(`Error reopening portal: ${msg}`);
+            window.showAlert('Error reopening portal.');
         }
     });
 };
@@ -43596,7 +43013,6 @@ function _qGetProjects() {
 let _quotesCache = [];
 let _quotesLevel = 1;
 let _quotesSupplier = null;
-let _quotesCurrentId = null;
 
 /* --- Helper functions --- */
 function _updateQuotesStats(quotes) {
@@ -43630,17 +43046,9 @@ function _setBreadcrumb(supplier, quoteNum) {
     const bcSup = document.getElementById('quotes-bc-supplier');
     const bcSep2 = document.getElementById('quotes-bc-sep2');
     const bcQ = document.getElementById('quotes-bc-quote');
-    if (bcSup) {
-        bcSup.textContent = supplier || '';
-        bcSup.style.cursor = supplier ? 'pointer' : 'default';
-    }
+    if (bcSup) bcSup.textContent = supplier || '';
     if (bcSep2) bcSep2.classList.toggle('hidden', !quoteNum);
-    if (bcQ) {
-        bcQ.textContent = quoteNum || '';
-        bcQ.classList.toggle('hidden', !quoteNum);
-        bcQ.style.cursor = quoteNum ? 'pointer' : 'default';
-        if (_quotesCurrentId) bcQ.setAttribute('data-quote-id', String(_quotesCurrentId));
-    }
+    if (bcQ) { bcQ.textContent = quoteNum || ''; bcQ.classList.toggle('hidden', !quoteNum); }
 }
 
 function _avatarColor(name) {
@@ -43663,7 +43071,6 @@ function _renderQuotesLevel1() {
     if (!content) return;
     _quotesLevel = 1;
     _quotesSupplier = null;
-    _quotesCurrentId = null;
     _showBreadcrumb(false);
 
     if (_quotesCache.length === 0) {
@@ -43740,7 +43147,6 @@ function _renderQuotesLevel2(supplierName) {
     const content = document.getElementById('quotes-content');
     if (!content) return;
     _quotesLevel = 2;
-    _quotesCurrentId = null;
     _showBreadcrumb(true);
     _setBreadcrumb(supplierName, null);
 
@@ -43815,7 +43221,6 @@ function _renderQuotesLevel3(quote) {
     const content = document.getElementById('quotes-content');
     if (!content) return;
     _quotesLevel = 3;
-    _quotesCurrentId = quote && quote.id ? String(quote.id) : null;
     _showBreadcrumb(true);
     _setBreadcrumb(quote.supplier_name || '\u2014', quote.quote_number || quote.id);
 
@@ -44456,35 +43861,4 @@ const btnQuotesBcSupplier = document.getElementById('quotes-bc-supplier');
 if (btnQuotesBcSupplier) btnQuotesBcSupplier.onclick = () => {
     if (_quotesSupplier) _renderQuotesLevel2(_quotesSupplier);
 };
-
-const btnQuotesBcQuote = document.getElementById('quotes-bc-quote');
-if (btnQuotesBcQuote) btnQuotesBcQuote.onclick = () => {
-    if (_quotesCurrentId) window._quotesOpenDetail(_quotesCurrentId);
-};
-
-// Fallback delegated handlers (covers dynamic re-renders / stale bindings)
-document.addEventListener('click', (e) => {
-    const home = e.target && e.target.closest && e.target.closest('#quotes-bc-home');
-    if (home) {
-        e.preventDefault();
-        if (_quotesLevel === 3 && _quotesSupplier) _renderQuotesLevel2(_quotesSupplier);
-        else _renderQuotesLevel1();
-        return;
-    }
-
-    const sup = e.target && e.target.closest && e.target.closest('#quotes-bc-supplier');
-    if (sup) {
-        e.preventDefault();
-        const name = _quotesSupplier || (sup.textContent || '').trim();
-        if (name) _renderQuotesLevel2(name);
-        return;
-    }
-
-    const qbtn = e.target && e.target.closest && e.target.closest('#quotes-bc-quote');
-    if (qbtn) {
-        e.preventDefault();
-        const qid = _quotesCurrentId || qbtn.getAttribute('data-quote-id');
-        if (qid) window._quotesOpenDetail(qid);
-    }
-});
 
