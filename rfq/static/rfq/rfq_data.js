@@ -10,6 +10,8 @@
   const LS_KEYS = {
     PROJECTS: "rfq_projects_v1",
     ACTIVE_PROJECT: "rfq_active_project_id",
+    PROJECTS_VERSION: 'rfq_projects_version_v1',
+    SYNC_SIGNAL: 'rfq_sync_signal_v1',
   };
 
   const safeJsonParse = (value, fallback) => {
@@ -54,6 +56,8 @@
 
 const nowIso = () => new Date().toISOString();
 
+  const _thisTabId = `${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+
   const uid = () => {
     // good enough unique id for localStorage
     const r = Math.random().toString(16).slice(2);
@@ -62,6 +66,19 @@ const nowIso = () => new Date().toISOString();
 
   const saveProjects = (projects) => {
     localStorage.setItem(LS_KEYS.PROJECTS, JSON.stringify(Array.isArray(projects) ? projects : []));
+  };
+
+  const _emitMutationSignal = (type, projectId) => {
+    const at = Date.now();
+    try { localStorage.setItem(LS_KEYS.PROJECTS_VERSION, String(at)); } catch (e) {}
+    try {
+      localStorage.setItem(LS_KEYS.SYNC_SIGNAL, JSON.stringify({
+        tab: _thisTabId,
+        at,
+        type: String(type || 'mutation'),
+        projectId: projectId ? String(projectId) : '',
+      }));
+    } catch (e) {}
   };
 
 
@@ -124,6 +141,7 @@ const nowIso = () => new Date().toISOString();
 
   let _syncTimer = null;
   let _syncInFlight = false;
+  const _dirtyProjectIds = new Set();
 
   const LOCK = {
     ACQUIRE: '/api/locks/acquire',
@@ -163,6 +181,14 @@ const nowIso = () => new Date().toISOString();
     return true;
   };
 
+  const ensureProjectLock = async (projectId) => {
+    try {
+      return await _ensureProjectLock(projectId);
+    } catch (e) {
+      return false;
+    }
+  };
+
   const _handleVersionConflict = (body) => {
     const canonical = body && body.project && body.project.id ? body.project : null;
     if (!canonical) return;
@@ -185,7 +211,10 @@ const nowIso = () => new Date().toISOString();
   };
 
   const _syncPayload = async () => {
-    const projects = getProjects();
+    const allProjects = getProjects();
+    const projects = allProjects.filter(p => _dirtyProjectIds.has(String(p && p.id)));
+    if (!projects.length) return { projects: [], blocked: [] };
+
     const lockResults = await Promise.all(projects.map(async (p) => {
       try {
         const ok = await _ensureProjectLock(p?.id);
@@ -209,7 +238,9 @@ const nowIso = () => new Date().toISOString();
     const payload = await _syncPayload();
     if (!payload.projects.length) return { ok: true, skipped: true, reason: 'lock_required' };
     try {
-      return await _fetchJson(API.BULK, { method: 'POST', body: JSON.stringify({ projects: payload.projects }) });
+      const res = await _fetchJson(API.BULK, { method: 'POST', body: JSON.stringify({ projects: payload.projects }) });
+      payload.projects.forEach(p => { if (p && p.id) _dirtyProjectIds.delete(String(p.id)); });
+      return res;
     } catch (err) {
       if (err && err.status === 409 && err.body && err.body.code === 'version_conflict') {
         _handleVersionConflict(err.body);
@@ -256,9 +287,20 @@ const nowIso = () => new Date().toISOString();
     }, d);
   };
 
-  const bootstrapFromServer = () => {
+  const _cleanupStaleDrafts = () => {
+    const queue = safeJsonParse(localStorage.getItem('rfq_sync_queue_v1'), []);
+    if (Array.isArray(queue) && queue.length > 0) return;
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+        const k = localStorage.key(i);
+        if (k && String(k).startsWith('rfq_project_draft_v1_')) localStorage.removeItem(k);
+      }
+    } catch (e) {}
+  };
+
+  const bootstrapFromServer = (preferServer = false) => {
     // 1) pull server projects
-    _fetchJson(API.PROJECTS)
+    return _fetchJson(API.PROJECTS)
       .then(data => {
         const serverProjects = data && Array.isArray(data.projects) ? data.projects : [];
         const localProjects = getProjects();
@@ -270,8 +312,34 @@ const nowIso = () => new Date().toISOString();
         }
 
         // Merge server -> local (choose newer by updated_at)
-        const merged = mergeProjectsById(localProjects, serverProjects);
+        let merged = mergeProjectsById(localProjects, serverProjects);
+        if (preferServer) {
+          const map = new Map((Array.isArray(localProjects) ? localProjects : []).filter(p => p && p.id).map(p => [String(p.id), p]));
+          (Array.isArray(serverProjects) ? serverProjects : []).forEach(p => { if (p && p.id) map.set(String(p.id), p); });
+          merged = Array.from(map.values());
+        }
+
+        const queue = safeJsonParse(localStorage.getItem('rfq_sync_queue_v1'), []);
+        const queueHasPending = Array.isArray(queue) && queue.length > 0;
+        const sessionScope = String(window.__RFQ_SESSION_SCOPE__ || '');
+        if (queueHasPending) {
+          merged.forEach((p, idx) => {
+            if (!p || !p.id) return;
+            const k = `rfq_project_draft_v1_${String(p.id)}`;
+            const draft = safeJsonParse(localStorage.getItem(k), null);
+            if (!draft || !draft.pending) return;
+            if (String(draft.sessionScope || '') !== sessionScope) return;
+            const base = String(draft.baseVersion || '');
+            const serverVersion = String(p.server_updated_at || p.data_version || p.updated_at || '');
+            if (!base || base !== serverVersion) return;
+            if (draft.project && typeof draft.project === 'object') {
+              merged[idx] = { ...p, ...draft.project };
+            }
+          });
+        }
+
         saveProjects(merged);
+        _cleanupStaleDrafts();
       })
       .catch(() => {
         // offline / server not reachable -> keep local only
@@ -332,6 +400,8 @@ const nowIso = () => new Date().toISOString();
     };
     projects.unshift(proj);
     saveProjects(projects);
+    _dirtyProjectIds.add(String(proj.id));
+    _emitMutationSignal('create_project', proj.id);
     try { queueSync(); } catch (e) {}
     localStorage.setItem(LS_KEYS.ACTIVE_PROJECT, proj.id);
     return proj;
@@ -348,6 +418,8 @@ const nowIso = () => new Date().toISOString();
     }
     project.updated_at = nowIso();
     saveProjects(projects);
+    _dirtyProjectIds.add(String(project.id));
+    _emitMutationSignal('update_project', project.id);
     try { queueSync(); } catch (e) {}
     return true;
   };
@@ -355,6 +427,8 @@ const nowIso = () => new Date().toISOString();
   const deleteProject = (projectId) => {
     const projects = getProjects().filter(p => String(p.id) !== String(projectId));
     saveProjects(projects);
+    _dirtyProjectIds.add(String(projectId));
+    _emitMutationSignal('delete_project', projectId);
     try { queueSync(); } catch (e) {}
     const active = localStorage.getItem(LS_KEYS.ACTIVE_PROJECT);
     if (String(active) === String(projectId)) {
@@ -594,6 +668,18 @@ const nowIso = () => new Date().toISOString();
     return matches;
   };
 
+  try {
+    window.addEventListener('storage', (ev) => {
+      const key = ev && ev.key ? String(ev.key) : '';
+      if (key !== LS_KEYS.SYNC_SIGNAL && key !== LS_KEYS.PROJECTS_VERSION) return;
+      const payload = safeJsonParse(ev && ev.newValue ? ev.newValue : '', null);
+      if (payload && payload.tab && payload.tab === _thisTabId) return;
+      setTimeout(() => {
+        try { bootstrapFromServer(true); } catch (e) {}
+      }, 200);
+    });
+  } catch (e) {}
+
   try { bootstrapFromServer(); } catch (e) {}
 
   window.RFQData = {
@@ -624,6 +710,7 @@ const nowIso = () => new Date().toISOString();
     syncNow,
     syncNowAsync,
     queueSync,
+    ensureProjectLock,
     resetServer: function(){ return _fetchJson(API.RESET, { method: 'POST', body: '{}' }); },
     bootstrapFromServer,
   };

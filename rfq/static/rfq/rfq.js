@@ -9335,9 +9335,15 @@ window.SystemApps.rfq = {
                     }
                 });
 
+                let __lastLockToastAt = 0;
                 window.addEventListener('rfq:project-lock-required', (ev) => {
-                    const blocked = (ev && ev.detail && Array.isArray(ev.detail.blockedProjectIds)) ? ev.detail.blockedProjectIds : [];
+                    const blocked = (ev && ev.detail && Array.isArray(ev.detail.blockedProjectIds)) ? ev.detail.blockedProjectIds.map(String) : [];
                     if (!blocked.length) return;
+                    const activeId = currentProject && currentProject.id ? String(currentProject.id) : '';
+                    if (activeId && !blocked.includes(activeId)) return;
+                    const now = Date.now();
+                    if (now - __lastLockToastAt < 8000) return;
+                    __lastLockToastAt = now;
                     if (window.showToast) {
                         window.showToast('Project Data lock required. Save blocked until lock is acquired.', 'warning');
                     }
@@ -24219,10 +24225,18 @@ Best regards`)}</textarea>
             return detailContent;
         }
 
-        function saveDetailChanges(shouldClose = true) {
-            if (currentDetailIndex === null) return;
+        async function saveDetailChanges(shouldClose = true) {
+            if (currentDetailIndex === null) return false;
             const liveItem = currentProject && currentProject.items ? currentProject.items[currentDetailIndex] : null;
-            if (!liveItem) return;
+            if (!liveItem) return false;
+
+            if (window.RFQData && typeof window.RFQData.ensureProjectLock === 'function') {
+                const hasLock = await window.RFQData.ensureProjectLock(currentProject && currentProject.id);
+                if (!hasLock) {
+                    if (window.showToast) window.showToast('Project Data lock required. Save blocked until lock is acquired.', 'warning');
+                    return false;
+                }
+            }
 
             console.log('[SaveDetail] Before save - item status:', liveItem.status);
 
@@ -24271,6 +24285,7 @@ Best regards`)}</textarea>
             if (shouldClose) {
                 closeDetailWindow();
             }
+            return true;
         }
 
         function closeDetailWindow() {
@@ -25348,10 +25363,11 @@ Best regards`)}</textarea>
         // --- Uložit Detail Logic (Custom Implementation) ---
 
         // --- Uložit Detail Logic (Unified, keeps legacy buttons too) ---
-        function handleUložitDetail(shouldClose) {
+        async function handleUložitDetail(shouldClose) {
             try {
                 // Uložit without closing first, so we can guarantee navigation on "Uložit & Back"
-                saveDetailChanges(false);
+                const saved = await saveDetailChanges(false);
+                if (!saved) return;
 
                 // visual feedback for 'Uložit' (no close)
                 if (!shouldClose) {
@@ -25368,13 +25384,13 @@ Best regards`)}</textarea>
                         }, 900);
                     }
                 }
-            } catch (e) {
-                console.error('Uložit detail failed', e);
-                showToast('Uložit failed: ' + (e && e.message ? e.message : String(e)), 'error');
-            } finally {
+
                 if (shouldClose) {
                     try { closeDetailWindow(); } catch (e) { }
                 }
+            } catch (e) {
+                console.error('Uložit detail failed', e);
+                showToast('Uložit failed: ' + (e && e.message ? e.message : String(e)), 'error');
             }
         }
 
