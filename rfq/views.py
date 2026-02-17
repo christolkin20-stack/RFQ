@@ -9,7 +9,7 @@ def app(request, bundle_id=None):
     if not request.user.is_authenticated:
         return redirect(f"/login/?next={request.path}")
     return render(request, 'rfq/app.html', {
-        'build_version': 'django-v127-bootstrap-server-refresh',
+        'build_version': 'django-v132-main-rehydrate-fix',
     })
 
 

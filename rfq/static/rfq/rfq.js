@@ -10362,7 +10362,18 @@ window.SystemApps.rfq = {
 
             projects = getAllProjectsSafe();
 
-            const list = Array.isArray(projects) ? projects : [];
+            let list = Array.isArray(projects) ? projects : [];
+            if (!list.length && window.RFQData && typeof window.RFQData.bootstrapFromServer === 'function' && !window.__rfqMainBootstrapRetry) {
+                window.__rfqMainBootstrapRetry = true;
+                Promise.resolve(window.RFQData.bootstrapFromServer(true))
+                    .catch(() => {})
+                    .finally(() => {
+                        setTimeout(() => {
+                            window.__rfqMainBootstrapRetry = false;
+                            try { renderMainOverview(); } catch (e) {}
+                        }, 50);
+                    });
+            }
             const tb = getEl('main-projects-tbody');
             const tbSup = getEl('main-top-suppliers-tbody');
 
