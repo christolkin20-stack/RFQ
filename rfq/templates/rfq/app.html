@@ -23,6 +23,11 @@
   <script src="{% static 'rfq/rfq.js' %}?v={{ build_version }}"></script>
 
   <script>
+    const getCSRFToken = () => {
+      const m = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
       try {
         // Temporary hard safety: avoid cross-account stale cache bleed
@@ -102,7 +107,7 @@
                   try {
                     const res = await fetch('/api/session/switch_company', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                       credentials: 'same-origin',
                       body: JSON.stringify({ company_id: scopeEl.value })
                     });

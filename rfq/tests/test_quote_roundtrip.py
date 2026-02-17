@@ -3,7 +3,7 @@ import json
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from rfq.models import Project, Quote, QuoteLine
+from rfq.models import Company, Project, Quote, QuoteLine, UserCompanyProfile
 
 
 @override_settings(DEBUG=True, DJANGO_DEBUG=True, SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
@@ -11,11 +11,14 @@ class QuoteRoundtripTests(TestCase):
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username='buyer', password='pass12345')
+        self.company = Company.objects.create(name='Roundtrip Co')
+        UserCompanyProfile.objects.create(user=self.user, company=self.company, role='editor', is_active=True)
         self.client.login(username='buyer', password='pass12345')
 
         self.project = Project.objects.create(
             id='proj-rt-1',
             name='Roundtrip Project',
+            company=self.company,
             data={
                 'items': [
                     {

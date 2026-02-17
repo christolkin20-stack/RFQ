@@ -94,12 +94,26 @@ const nowIso = () => new Date().toISOString();
     RESET: '/api/projects/reset',
   };
 
+  const getCSRFToken = () => {
+    try {
+      const m = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    } catch (e) {
+      return '';
+    }
+  };
+
   const _fetchJson = (url, opts) => {
     try {
+      const method = ((opts && opts.method) || 'GET').toUpperCase();
+      const csrfHeaders = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)
+        ? { 'X-CSRFToken': getCSRFToken() }
+        : {};
       return fetch(url, {
-        method: (opts && opts.method) || 'GET',
+        method,
         headers: {
           'Content-Type': 'application/json',
+          ...csrfHeaders,
           ...(opts && opts.headers ? opts.headers : {}),
         },
         credentials: 'same-origin',

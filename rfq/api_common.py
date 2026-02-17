@@ -11,27 +11,20 @@ logger = logging.getLogger(__name__)
 
 
 def require_buyer_auth(request):
-    """
-    Return a 401 JsonResponse if request is not authenticated in production.
-    In DEBUG mode, allow unauthenticated access (single-user/local dev).
-    """
+    """Return a 401 JsonResponse if request is not authenticated."""
     if request.user.is_authenticated:
-        return None
-    if getattr(django_settings, 'DEBUG', False):
         return None
     return JsonResponse({'error': 'Authentication required'}, status=401)
 
 
 def require_same_origin_for_unsafe(request):
-    """Extra CSRF mitigation for csrf_exempt API endpoints in production."""
+    """Extra CSRF mitigation for unsafe API methods."""
     if request.method in ('GET', 'HEAD', 'OPTIONS'):
-        return None
-    if getattr(django_settings, 'DEBUG', False):
         return None
 
     src = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER')
     if not src:
-        return JsonResponse({'error': 'Missing origin/referrer'}, status=403)
+        return None
 
     try:
         parsed = urlparse(src)
@@ -129,42 +122,13 @@ def get_request_actor(request):
 def require_auth_and_profile(request):
     auth_err = require_buyer_auth(request)
     if auth_err:
-        # In DEBUG mode require_buyer_auth already allows unauth; preserve that behavior.
-        if getattr(django_settings, 'DEBUG', False):
-            return {
-                'user': getattr(request, 'user', None),
-                'profile': None,
-                'company': None,
-                'role': 'superadmin',
-                'is_superadmin': True,
-                'is_management': True,
-            }, None
         return None, auth_err
 
     actor = get_request_actor(request)
     if actor is None:
-        if getattr(django_settings, 'DEBUG', False):
-            return {
-                'user': getattr(request, 'user', None),
-                'profile': None,
-                'company': None,
-                'role': 'superadmin',
-                'is_superadmin': True,
-                'is_management': True,
-            }, None
         return None, JsonResponse({'error': 'Authentication required'}, status=401)
 
     if not actor.get('is_superadmin') and not actor.get('company'):
-        if getattr(django_settings, 'DEBUG', False):
-            actor = {
-                'user': actor.get('user'),
-                'profile': actor.get('profile'),
-                'company': None,
-                'role': 'superadmin',
-                'is_superadmin': True,
-                'is_management': True,
-            }
-            return actor, None
         return None, JsonResponse({'error': 'User has no company assigned'}, status=403)
 
     return actor, None
@@ -173,6 +137,17 @@ def require_auth_and_profile(request):
 def require_role(actor, min_role='viewer'):
     role = (actor or {}).get('role') or 'viewer'
     return ROLE_ORDER.get(role, 0) >= ROLE_ORDER.get(min_role, 0)
+
+
+def company_qs(model, actor):
+    qs = model.objects.all()
+    if actor and actor.get('is_superadmin'):
+        scope_company = actor.get('scope_company')
+        return qs.filter(company=scope_company) if scope_company else qs
+    company = (actor or {}).get('company')
+    if company is None:
+        return qs.none()
+    return qs.filter(company=company)
 
 
 def can_view_project(actor, project):
@@ -189,7 +164,8 @@ def can_view_project(actor, project):
     if role in ('admin',):
         return True
 
-    # Restricted only when explicit ACL rows exist for the project.
+    # NOTE: ProjectAccess is open-by-default: if no ACL rows exist, project is viewable
+    # to company users with baseline role access. Restrictions apply only when ACL rows exist.
     qs = ProjectAccess.objects.filter(project_id=project.id)
     if not qs.exists():
         return True

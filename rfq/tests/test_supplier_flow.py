@@ -99,9 +99,15 @@ def _sample_project_data_with_existing_main():
 @override_settings(SECURE_SSL_REDIRECT=False, DEBUG=True, ALLOWED_HOSTS=['testserver'])
 class SupplierPortalFlowTests(TestCase):
     def setUp(self):
+        self.company = Company.objects.create(name='SupplierFlow Co')
+        self.buyer = get_user_model().objects.create_user(username='buyer-admin', password='x')
+        UserCompanyProfile.objects.create(user=self.buyer, company=self.company, role='admin', is_active=True)
+        self.client.force_login(self.buyer)
+
         self.project = Project.objects.create(
             id='proj1',
             name='Proj 1',
+            company=self.company,
             data=_sample_project_data(),
         )
         self.token = 'tok123'
@@ -210,7 +216,7 @@ class SupplierPortalFlowTests(TestCase):
         self.assertFalse((self.access.submission_data or {}).get('reopen_requested', False))
 
     def test_approve_two_items_accepts_price_1_and_updates_both(self):
-        project = Project.objects.create(id='proj2', name='Proj 2', data=_sample_project_data_two_items())
+        project = Project.objects.create(id='proj2', name='Proj 2', company=self.company, data=_sample_project_data_two_items())
         token = 'tok-two'
         SupplierAccess.objects.create(
             id=token,
@@ -267,7 +273,7 @@ class SupplierPortalFlowTests(TestCase):
         self.assertEqual(float(lines[1].price_1), 15.0)
 
     def test_approve_two_items_without_ids_updates_both_by_drawing(self):
-        project = Project.objects.create(id='proj3', name='Proj 3', data=_sample_project_data_two_items_no_ids())
+        project = Project.objects.create(id='proj3', name='Proj 3', company=self.company, data=_sample_project_data_two_items_no_ids())
         token = 'tok-no-ids'
         SupplierAccess.objects.create(
             id=token,
@@ -326,7 +332,7 @@ class SupplierPortalFlowTests(TestCase):
         self.assertEqual(lines[1].qty_1, '200')
 
     def test_approve_does_not_override_existing_main_supplier(self):
-        project = Project.objects.create(id='proj4', name='Proj 4', data=_sample_project_data_with_existing_main())
+        project = Project.objects.create(id='proj4', name='Proj 4', company=self.company, data=_sample_project_data_with_existing_main())
         token = 'tok-keep-main'
         SupplierAccess.objects.create(
             id=token,
