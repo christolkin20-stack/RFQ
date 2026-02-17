@@ -1,11 +1,9 @@
 import json
+import logging
 import uuid
 from decimal import Decimal, InvalidOperation
-
 from django.db import transaction
 from django.http import HttpResponseNotAllowed, JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
 from .api_common import (
     audit_log as _audit_log,
     get_buyer_username as _get_buyer_username,
@@ -16,6 +14,7 @@ from .api_common import (
 )
 from .models import Project, Quote, QuoteLine, SupplierAccess
 
+logger = logging.getLogger(__name__)
 
 def _projects_qs_for_actor(actor):
     qs = Project.objects.all()
@@ -26,8 +25,6 @@ def _projects_qs_for_actor(actor):
     if company is None:
         return qs.none()
     return qs.filter(company=company)
-
-
 def _quotes_qs_for_actor(actor):
     qs = Quote.objects.select_related('project')
     if actor and actor.get('is_superadmin'):
@@ -37,8 +34,6 @@ def _quotes_qs_for_actor(actor):
     if company is None:
         return qs.none()
     return qs.filter(company=company)
-
-
 def _portal_qs_for_actor(actor):
     qs = SupplierAccess.objects.select_related('project').filter(status__in=['submitted', 'approved', 're_quote_requested'])
     if actor and actor.get('is_superadmin'):
@@ -48,19 +43,13 @@ def _portal_qs_for_actor(actor):
     if company is None:
         return qs.none()
     return qs.filter(company=company)
-
-
 def _normalize_name(s):
     return ' '.join(str(s).split()).strip()
-
-
 def _safe_int(v, default=0):
     try:
         return int(float(v))
     except (ValueError, TypeError):
         return default
-
-
 def _safe_decimal(v):
     if v is None or v == '':
         return None
@@ -68,8 +57,6 @@ def _safe_decimal(v):
         return Decimal(str(v).replace(',', '.'))
     except (InvalidOperation, ValueError, TypeError):
         return None
-
-
 def _parse_val_decimal(val):
     if val is None or val == '':
         return None
@@ -77,49 +64,37 @@ def _parse_val_decimal(val):
         return Decimal(str(val).replace(',', '.').strip())
     except (ValueError, InvalidOperation):
         return None
-
-
-@csrf_exempt
 def quotes_list(request):
     if request.method != 'GET':
         return HttpResponseNotAllowed(['GET'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     from datetime import date, datetime
     from django.db.models import Q
     from django.utils import timezone
-
     manual_qs = _quotes_qs_for_actor(actor)
     portal_qs = _portal_qs_for_actor(actor)
-
     project_id = request.GET.get('project_id')
     if project_id:
         manual_qs = manual_qs.filter(project_id=project_id)
         portal_qs = portal_qs.filter(project_id=project_id)
-
     supplier = request.GET.get('supplier', '').strip()
     if supplier:
         manual_qs = manual_qs.filter(supplier_name__icontains=supplier)
         portal_qs = portal_qs.filter(supplier_name__icontains=supplier)
-
     expired_param = request.GET.get('expired', '').strip().lower()
     today = date.today()
     now = timezone.now()
-
     if expired_param == 'true':
         manual_qs = manual_qs.filter(expire_date__lt=today)
         portal_qs = portal_qs.filter(Q(valid_until__lt=now) | Q(status__in=['expired', 'lost', 'rejected']))
     elif expired_param == 'false':
         manual_qs = manual_qs.filter(expire_date__gte=today)
         portal_qs = portal_qs.exclude(Q(valid_until__lt=now) | Q(status__in=['expired', 'lost', 'rejected']))
-
     search = request.GET.get('search', '').strip()
     if search:
         manual_qs = manual_qs.filter(
@@ -129,14 +104,12 @@ def quotes_list(request):
             | Q(received_from__icontains=search)
         )
         portal_qs = portal_qs.filter(Q(supplier_name__icontains=search) | Q(project__name__icontains=search))
-
     results = []
     for q in manual_qs:
         d = q.as_dict()
         d['source_type'] = 'manual'
         d['status'] = 'expired' if (q.expire_date and q.expire_date < today) else 'active'
         results.append(d)
-
     for p in portal_qs:
         sub = p.submission_data or {}
         q_num = sub.get('quote_number') or f'PORTAL-{p.round}'
@@ -148,7 +121,6 @@ def quotes_list(request):
                 pass
         items = sub.get('items') or p.requested_items or []
         lines_count = len(items) if isinstance(items, list) else 0
-
         results.append({
             'id': p.id,
             'project_id': p.project_id,
@@ -164,9 +136,7 @@ def quotes_list(request):
             'lines_count': lines_count,
             'source_id': p.id,
         })
-
     results.sort(key=lambda x: str(x.get('create_date') or ''), reverse=True)
-
     try:
         limit = int(request.GET.get('limit', 100))
         offset = int(request.GET.get('offset', 0))
@@ -174,26 +144,18 @@ def quotes_list(request):
     except (ValueError, TypeError):
         limit = 100
         offset = 0
-
     total = len(results)
     page_items = results[offset:offset + limit]
-
     return JsonResponse({'ok': True, 'quotes': page_items, 'total': total, 'limit': limit, 'offset': offset})
-
-
-@csrf_exempt
 def quotes_detail(request, quote_id):
     if request.method != 'GET':
         return HttpResponseNotAllowed(['GET'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     try:
         quote = _quotes_qs_for_actor(actor).get(id=quote_id)
         data = quote.as_dict()
@@ -202,16 +164,13 @@ def quotes_detail(request, quote_id):
         return JsonResponse({'ok': True, 'quote': data})
     except Quote.DoesNotExist:
         pass
-
     try:
         access = _portal_qs_for_actor(actor).get(id=quote_id)
     except SupplierAccess.DoesNotExist:
         return JsonResponse({'error': 'Quote not found'}, status=404)
-
     sub = access.submission_data or {}
     sub_items = sub.get('items') or []
     req_items = access.requested_items or []
-
     req_by_id = {}
     req_by_dn = {}
     if isinstance(req_items, list):
@@ -227,7 +186,6 @@ def quotes_detail(request, quote_id):
                 req_by_dn[rdn] = ri
             if rmpn:
                 req_by_dn[rmpn] = ri
-
     merged_items = []
     if isinstance(sub_items, list) and sub_items:
         for si in sub_items:
@@ -245,7 +203,6 @@ def quotes_detail(request, quote_id):
             merged_items.append({**ri, **si})
     elif isinstance(req_items, list) and req_items:
         merged_items = [ri for ri in req_items if isinstance(ri, dict)]
-
     lines = []
     for idx, item in enumerate(merged_items):
         line = {
@@ -273,7 +230,6 @@ def quotes_detail(request, quote_id):
             else:
                 line[f'price_{i}'] = None
         lines.append(line)
-
     data = {
         'id': access.id,
         'project_id': access.project_id,
@@ -293,40 +249,29 @@ def quotes_detail(request, quote_id):
         'notes': sub.get('notes') or '',
         'received_from': access.contact_name or sub.get('supplier_contact_name') or '',
     }
-
     return JsonResponse({'ok': True, 'quote': data})
-
-
-@csrf_exempt
 def quotes_create(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if not _require_role(actor, 'editor'):
         return JsonResponse({'error': 'Edit permission required'}, status=403)
-
     try:
         data = json.loads(request.body.decode('utf-8'))
     except (ValueError, UnicodeDecodeError):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
     supplier_name = data.get('supplier_name', '').strip()
     expire_date_str = data.get('expire_date', '').strip()
     if not supplier_name:
         return JsonResponse({'error': 'supplier_name is required'}, status=400)
     if not expire_date_str:
         return JsonResponse({'error': 'expire_date is required'}, status=400)
-
     from datetime import datetime, timedelta
-
     try:
         expire_date = datetime.strptime(expire_date_str, '%Y-%m-%d').date()
     except ValueError:
@@ -335,16 +280,13 @@ def quotes_create(request):
             expire_date = (datetime.now() + timedelta(days=expire_preset)).date()
         else:
             return JsonResponse({'error': 'Invalid expire_date format (use YYYY-MM-DD or expire_preset)'}, status=400)
-
     quote_id = data.get('id') or str(uuid.uuid4())
     project_id = data.get('project_id')
-
     project_obj = None
     if project_id:
         project_obj = _projects_qs_for_actor(actor).filter(id=str(project_id)).first()
         if not project_obj:
             return JsonResponse({'error': 'Project not found or access denied'}, status=404)
-
     with transaction.atomic():
         quote = Quote(
             id=quote_id,
@@ -370,7 +312,6 @@ def quotes_create(request):
             source_id=data.get('source_id', ''),
         )
         quote.save()
-
         for idx, line_data in enumerate(data.get('lines', [])):
             line = QuoteLine(
                 quote=quote,
@@ -391,39 +332,28 @@ def quotes_create(request):
                 setattr(line, f'qty_{i}', line_data.get(f'qty_{i}', ''))
                 setattr(line, f'price_{i}', line_data.get(f'price_{i}'))
             line.save()
-
     _audit_log(request, actor, action='quote.create', entity_type='quote', entity_id=quote.id, project=quote.project, metadata={'quote_number': quote.quote_number})
     return JsonResponse({'ok': True, 'quote': quote.as_dict()}, status=201)
-
-
-@csrf_exempt
 def quotes_update(request, quote_id):
     if request.method not in ('PUT', 'POST'):
         return HttpResponseNotAllowed(['PUT', 'POST'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if not _require_role(actor, 'editor'):
         return JsonResponse({'error': 'Edit permission required'}, status=403)
-
     try:
         quote = _quotes_qs_for_actor(actor).get(id=quote_id)
     except Quote.DoesNotExist:
         return JsonResponse({'error': 'Quote not found'}, status=404)
-
     try:
         data = json.loads(request.body.decode('utf-8'))
     except (ValueError, UnicodeDecodeError):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
     from datetime import datetime
-
     with transaction.atomic():
         if 'supplier_name' in data:
             quote.supplier_name = data['supplier_name']
@@ -466,9 +396,7 @@ def quotes_update(request, quote_id):
                 quote.project = None
         if 'project_name' in data:
             quote.project_name = data['project_name']
-
         quote.save()
-
         if 'lines' in data:
             quote.lines.all().delete()
             for idx, line_data in enumerate(data['lines']):
@@ -491,87 +419,64 @@ def quotes_update(request, quote_id):
                     setattr(line, f'qty_{i}', line_data.get(f'qty_{i}', ''))
                     setattr(line, f'price_{i}', line_data.get(f'price_{i}'))
                 line.save()
-
     _audit_log(request, actor, action='quote.update', entity_type='quote', entity_id=quote.id, project=quote.project, metadata={'quote_number': quote.quote_number})
     return JsonResponse({'ok': True, 'quote': quote.as_dict()})
-
-
-@csrf_exempt
 def quotes_delete(request, quote_id):
     if request.method != 'DELETE':
         return HttpResponseNotAllowed(['DELETE'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if not _require_role(actor, 'admin'):
         return JsonResponse({'error': 'Admin permission required'}, status=403)
-
     try:
         quote = _quotes_qs_for_actor(actor).get(id=quote_id)
     except Quote.DoesNotExist:
         return JsonResponse({'error': 'Quote not found'}, status=404)
-
     quote_number = quote.quote_number
     quote_id_val = quote.id
     proj = quote.project
     quote.delete()
     _audit_log(request, actor, action='quote.delete', entity_type='quote', entity_id=quote_id_val, project=proj, metadata={'quote_number': quote_number})
     return JsonResponse({'ok': True, 'deleted': quote_number})
-
-
-@csrf_exempt
 def quotes_create_from_item(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if not _require_role(actor, 'editor'):
         return JsonResponse({'error': 'Edit permission required'}, status=403)
-
     from datetime import timedelta
     from django.utils import timezone
-
     try:
         data = json.loads(request.body)
-    except Exception:
+    except (TypeError, ValueError, UnicodeDecodeError):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
     pid = data.get('project_id')
     item_id = data.get('item_id')
     sname = (data.get('supplier_name') or '').strip()
     if not pid or not item_id or not sname:
         return JsonResponse({'error': 'Missing required fields (project_id, item_id, supplier_name)'}, status=400)
-
     try:
         proj = _projects_qs_for_actor(actor).get(id=pid)
     except Project.DoesNotExist:
         return JsonResponse({'error': 'Project not found'}, status=404)
-
     target_item = None
     for it in (proj.data or {}).get('items') or []:
         if str(it.get('id') or '') == str(item_id):
             target_item = it
             break
-
     if not target_item:
         return JsonResponse({'error': 'Item not found in project'}, status=404)
-
     now = timezone.now()
     user = _get_buyer_username(request)
-
     quote = Quote.objects.create(
         id=str(uuid.uuid4()),
         project=proj,
@@ -584,7 +489,6 @@ def quotes_create_from_item(request):
         currency=str(data.get('currency') or 'EUR'),
         quote_number=f"{_normalize_name(sname)[:15]}_{now.strftime('%Y%m%d_%H%M')}",
     )
-
     line = QuoteLine(
         quote=quote,
         drawing_number=target_item.get('drawing_no') or target_item.get('item_drawing_no') or '',
@@ -594,67 +498,50 @@ def quotes_create_from_item(request):
         uom=target_item.get('uom') or 'pcs',
         line_number=1,
     )
-
     line.qty_1 = str(data.get('qty') or data.get('qty_1') or '')
     line.price_1 = _parse_val_decimal(data.get('price') or data.get('price_1'))
     line.moq = int(_parse_val_decimal(data.get('moq')) or 1)
     line.supplier_lead_time = str(data.get('lead_time') or '')
     line.notes = str(data.get('notes') or '')
-
     for i in range(2, 11):
         setattr(line, f'qty_{i}', str(data.get(f'qty_{i}') or ''))
         setattr(line, f'price_{i}', _parse_val_decimal(data.get(f'price_{i}')))
-
     line.save()
     return JsonResponse({'ok': True, 'quote_id': quote.id, 'line_id': line.id})
-
-
-@csrf_exempt
 def quotes_export_to_item(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if not _require_role(actor, 'editor'):
         return JsonResponse({'error': 'Edit permission required'}, status=403)
-
     from django.utils import timezone
-
     try:
         data = json.loads(request.body)
-    except Exception:
+    except (TypeError, ValueError, UnicodeDecodeError):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
     pid = data.get('project_id')
     line_ids = data.get('line_ids') or []
     if not line_ids and data.get('line_id'):
         line_ids = [data.get('line_id')]
-
     if not pid or not line_ids:
         return JsonResponse({'error': 'Missing project_id or line_ids'}, status=400)
-
     try:
         proj = _projects_qs_for_actor(actor).get(id=pid)
     except Project.DoesNotExist:
         return JsonResponse({'error': 'Project Not Found'}, status=404)
-
     try:
         quote_lines = QuoteLine.objects.filter(id__in=line_ids).select_related('quote')
         pdata = proj.data or {}
         items = pdata.get('items') or []
         updates_count = 0
-
         for ql in quote_lines:
             q_dn = _normalize_name(ql.drawing_number or '').lower()
             q_mpn = _normalize_name(ql.mpn or '').lower()
-
             target_item = None
             for it in items:
                 it_dn = _normalize_name(it.get('drawing_no') or it.get('item_drawing_no') or '').lower()
@@ -662,12 +549,10 @@ def quotes_export_to_item(request):
                 if (q_dn and it_dn and q_dn == it_dn) or (q_mpn and it_mpn and q_mpn == it_mpn):
                     target_item = it
                     break
-
             if target_item:
                 sups = target_item.get('suppliers') or []
                 if not isinstance(sups, list):
                     sups = []
-
                 sup_entry = {
                     'supplier_name': ql.quote.supplier_name,
                     'name': ql.quote.supplier_name,
@@ -688,7 +573,6 @@ def quotes_export_to_item(request):
                     val = getattr(ql, f'price_{i}', None)
                     if val:
                         sup_entry[f'price_{i}'] = float(val)
-
                 found = False
                 for s in sups:
                     sn = _normalize_name(s.get('supplier_name') or s.get('name') or s.get('supplier') or '').lower()
@@ -698,55 +582,42 @@ def quotes_export_to_item(request):
                         break
                 if not found:
                     sups.append(sup_entry)
-
                 target_item['suppliers'] = sups
                 updates_count += 1
-
         if updates_count > 0:
             proj.data = pdata
             proj.save()
-
         return JsonResponse({'ok': True, 'updated': updates_count})
-    except Exception as e:
-        return JsonResponse({'error': f'Server Error: {str(e)}'}, status=500)
-
-
-@csrf_exempt
+    except Exception:
+        logger.exception('Unexpected error')
+        return JsonResponse({'error': 'Server Error'}, status=500)
 def quotes_bulk_import(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if not _require_role(actor, 'editor'):
         return JsonResponse({'error': 'Edit permission required'}, status=403)
-
     payload = _json_body(request)
     if not isinstance(payload, list):
         return JsonResponse({'error': 'Expected a list of quotes'}, status=400)
-
     imported_count, lines_count, errors = 0, 0, []
-
     with transaction.atomic():
         for idx, q_data in enumerate(payload):
             sname = str(q_data.get('supplier_name') or '').strip()
             if not sname:
                 errors.append(f'Row {idx+1}: Missing supplier name')
                 continue
-
             q_num = str(q_data.get('quote_number') or '').strip()
             if not q_num:
                 from django.utils import timezone
                 import random
                 now_str = timezone.now().strftime('%Y%m%d_%H%M')
                 q_num = f"{sname.replace(' ', '_').upper()}_{now_str}_{random.randint(1000, 9999)}"
-
             proj = None
             q_pid = q_data.get('project_id')
             if q_pid:
@@ -754,7 +625,6 @@ def quotes_bulk_import(request):
                 if not proj:
                     errors.append(f'Row {idx+1}: invalid project_id or access denied')
                     continue
-
             quote, _created = _quotes_qs_for_actor(actor).update_or_create(
                 quote_number=q_num,
                 defaults={
@@ -767,11 +637,9 @@ def quotes_bulk_import(request):
                     'company': (proj.company if proj else actor.get('company')),
                 },
             )
-
             items = q_data.get('items') or []
             if not isinstance(items, list):
                 continue
-
             start_line_num = quote.lines.count() + 1
             for i_idx, item in enumerate(items):
                 QuoteLine.objects.create(
@@ -787,50 +655,36 @@ def quotes_bulk_import(request):
                     qty_1=str(item.get('qty') or ''),
                 )
                 lines_count += 1
-
             imported_count += 1
-
     return JsonResponse({'ok': True, 'imported_quotes': imported_count, 'imported_lines': lines_count, 'errors': errors})
-
-
-@csrf_exempt
 def quotes_upsert_from_planner(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-
     actor, auth_err = _require_auth_and_profile(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if not _require_role(actor, 'editor'):
         return JsonResponse({'error': 'Edit permission required'}, status=403)
-
     from datetime import timedelta
     from django.utils import timezone
-
     try:
         data = json.loads(request.body)
-    except Exception:
+    except (TypeError, ValueError, UnicodeDecodeError):
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
     pid = data.get('project_id')
     sname = (data.get('supplier_name') or '').strip()
     if not pid or not sname:
         return JsonResponse({'error': 'Missing project_id or supplier_name'}, status=400)
-
     try:
         proj = _projects_qs_for_actor(actor).get(id=pid)
     except Project.DoesNotExist:
         return JsonResponse({'error': 'Project not found'}, status=404)
-
     items_data = data.get('items') or []
     if not items_data:
         return JsonResponse({'error': 'No items provided'}, status=400)
-
     q_num = (data.get('quote_number') or '').strip()
     currency = data.get('currency') or 'EUR'
     expire_date_str = data.get('expire_date') or ''
@@ -839,7 +693,6 @@ def quotes_upsert_from_planner(request):
     mov = data.get('mov') or ''
     now = timezone.now()
     user = _get_buyer_username(request)
-
     expire_date = None
     if expire_date_str:
         try:
@@ -849,7 +702,6 @@ def quotes_upsert_from_planner(request):
             pass
     if not expire_date:
         expire_date = (now + timedelta(days=90)).date()
-
     try:
         with transaction.atomic():
             is_update = False
@@ -873,7 +725,6 @@ def quotes_upsert_from_planner(request):
                     if _quotes_qs_for_actor(actor).filter(quote_number=q_num).exists():
                         import random
                         q_num += f"_{random.randint(100, 999)}"
-
                 quote = Quote.objects.create(
                     id=str(uuid.uuid4()),
                     project=proj,
@@ -888,7 +739,6 @@ def quotes_upsert_from_planner(request):
                     shipping_cost=_safe_decimal(shipping_cost) or Decimal('0'),
                     mov=_safe_decimal(mov) or Decimal('0'),
                 )
-
             lines_count = 0
             for idx, item in enumerate(items_data):
                 line = QuoteLine(
@@ -907,7 +757,7 @@ def quotes_upsert_from_planner(request):
                     setattr(line, f'price_{i}', _safe_decimal(item.get(f'price_{i}')))
                 line.save()
                 lines_count += 1
-
         return JsonResponse({'ok': True, 'quote_id': quote.id, 'quote_number': quote.quote_number, 'lines_count': lines_count, 'is_update': is_update})
-    except Exception as e:
-        return JsonResponse({'error': f'Server error: {str(e)}'}, status=500)
+    except Exception:
+        logger.exception('Unexpected error')
+        return JsonResponse({'error': 'Server error'}, status=500)

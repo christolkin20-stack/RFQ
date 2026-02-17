@@ -26,11 +26,10 @@ class AuthGuardTests(TestCase):
 
 @override_settings(SECURE_SSL_REDIRECT=False, DEBUG=True, ALLOWED_HOSTS=['testserver'])
 class DebugModeBehaviorTests(TestCase):
-    def test_projects_bulk_invalid_payload_returns_400_not_401(self):
+    def test_projects_bulk_invalid_payload_in_debug_still_requires_auth(self):
         r = self.client.post('/api/projects/bulk', data='{}', content_type='application/json')
-        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.status_code, 401)
 
-    def test_quotes_create_invalid_payload_in_debug(self):
-        # In debug unauth is allowed, endpoint should proceed to payload validation path
+    def test_quotes_create_invalid_payload_in_debug_still_requires_auth(self):
         r = self.client.post('/api/quotes/create/', data='{}', content_type='application/json')
-        self.assertIn(r.status_code, (400, 500))
+        self.assertEqual(r.status_code, 401)

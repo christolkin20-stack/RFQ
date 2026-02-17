@@ -100,6 +100,11 @@ def _merge_submitted_values(items, submission):
 def portal(request, token):
     access = get_object_or_404(SupplierAccess, id=token)
 
+    from django.utils import timezone
+    if access.valid_until and access.valid_until <= timezone.now() and access.status != 'expired':
+        access.status = 'expired'
+        access.save(update_fields=['status'])
+
     # Cancelled portal
     if access.status == 'expired':
         return render(request, 'rfq/supplier_portal.html', {

@@ -6,6 +6,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-only-change-me')
 # Secure-by-default: production unless explicitly enabled
 DEBUG = os.environ.get('DJANGO_DEBUG', '0') == '1'
+if not DEBUG and SECRET_KEY == 'dev-only-change-me':
+    raise RuntimeError('DJANGO_SECRET_KEY must be set when DEBUG=False')
 
 raw_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').strip()
 ALLOWED_HOSTS = [h.strip() for h in raw_hosts.split(',') if h.strip()]
@@ -56,12 +58,26 @@ WSGI_APPLICATION = 'rfq_django.wsgi.application'
 
 DATABASES = {
     'default': {
+        # SQLite is convenient for local/dev use; for production prefer PostgreSQL/MySQL.
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
 
 LANGUAGE_CODE = 'cs'
 TIME_ZONE = 'Europe/Prague'

@@ -15,10 +15,10 @@ class ApiSmokeTests(TestCase):
         self.assertIn('error', r.json())
 
     @override_settings(DEBUG=True, ALLOWED_HOSTS=['testserver'])
-    def test_projects_allowed_in_debug_mode(self):
+    def test_projects_requires_auth_in_debug_mode(self):
         r = self.client.get('/api/projects')
-        self.assertEqual(r.status_code, 200)
-        self.assertIn('projects', r.json())
+        self.assertEqual(r.status_code, 401)
+        self.assertIn('error', r.json())
 
     @override_settings(DEBUG=False, ALLOWED_HOSTS=['testserver'])
     def test_projects_post_requires_auth(self):

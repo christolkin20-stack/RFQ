@@ -4,19 +4,12 @@ import os
 import uuid
 from decimal import Decimal, InvalidOperation
 from django.http import JsonResponse, HttpResponseNotAllowed, HttpResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
-
 from .models import Project, Attachment, SupplierAccess, SupplierAccessRound, SupplierInteractionFile, Quote, QuoteLine
-
 logger = logging.getLogger(__name__)
-
-
 def _normalize_name(s):
     """Collapse whitespace and strip for robust supplier name matching."""
     return ' '.join(str(s).split()).strip()
-
-
 # Backward-compatible aliases during refactor (moved to rfq/api_common.py)
 from .api_common import (
     require_buyer_auth as _require_buyer_auth,
@@ -24,31 +17,22 @@ from .api_common import (
     get_buyer_username as _get_buyer_username,
     json_body as _json_body,
 )
-
-
 def health(request):
     return JsonResponse({'ok': True})
-
-
-@csrf_exempt
 def projects_collection(request):
     auth_err = _require_buyer_auth(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if request.method == 'GET':
         projects = [p.as_dict() for p in Project.objects.all()]
         return JsonResponse({'projects': projects})
-
     if request.method == 'POST':
         payload = _json_body(request)
         if not isinstance(payload, dict):
             return JsonResponse({'error': 'Invalid JSON body'}, status=400)
-
         proj = payload
         pid = str(proj.get('id') or uuid.uuid4().hex)
         name = str(proj.get('name') or 'Untitled')[:255]
@@ -58,29 +42,21 @@ def projects_collection(request):
             obj.data = proj
             obj.save()
         return JsonResponse({'project': obj.as_dict()})
-
     return HttpResponseNotAllowed(['GET', 'POST'])
-
-
-@csrf_exempt
 def project_detail(request, project_id: str):
     auth_err = _require_buyer_auth(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     pid = str(project_id)
-
     if request.method == 'GET':
         try:
             obj = Project.objects.get(id=pid)
         except Project.DoesNotExist:
             return JsonResponse({'error': 'Not found'}, status=404)
         return JsonResponse({'project': obj.as_dict()})
-
     if request.method in ('PUT', 'PATCH'):
         payload = _json_body(request)
         if not isinstance(payload, dict):
@@ -93,43 +69,32 @@ def project_detail(request, project_id: str):
             obj.data = proj
             obj.save()
         return JsonResponse({'project': obj.as_dict()})
-
     if request.method == 'DELETE':
         Project.objects.filter(id=pid).delete()
         return JsonResponse({'ok': True})
-
     return HttpResponseNotAllowed(['GET', 'PUT', 'PATCH', 'DELETE'])
-
-
-@csrf_exempt
 def projects_bulk(request):
     auth_err = _require_buyer_auth(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-
     payload = _json_body(request)
     projects = None
     if isinstance(payload, dict) and isinstance(payload.get('projects'), list):
         projects = payload.get('projects')
     elif isinstance(payload, list):
         projects = payload
-
     if not isinstance(projects, list):
         body_len = len(request.body) if request.body else 0
         logger.warning("[RFQ API] projects_bulk 400: payload type=%s, body_len=%s", type(payload).__name__, body_len)
         return JsonResponse({'error': f'Invalid payload (expected {{projects:[...]}}), got {type(payload).__name__}, body_len={body_len}'}, status=400)
-
     upserted = 0
     deleted = 0
     incoming_ids = set()
-
     with transaction.atomic():
         # Upsert all incoming projects
         for proj in projects:
@@ -143,52 +108,38 @@ def projects_bulk(request):
             obj.data = proj
             obj.save()
             upserted += 1
-
         # Delete projects not in incoming list (they were deleted locally)
         existing_ids = set(Project.objects.values_list('id', flat=True))
         ids_to_delete = existing_ids - incoming_ids
         if ids_to_delete:
             deleted = Project.objects.filter(id__in=ids_to_delete).delete()[0]
-
     return JsonResponse({'ok': True, 'upserted': upserted, 'deleted': deleted})
-
-
-@csrf_exempt
 def projects_reset(request):
     auth_err = _require_buyer_auth(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
     Project.objects.all().delete()
     return JsonResponse({'ok': True})
-
-
-@csrf_exempt
 def project_attachments(request, project_id: str):
     """List / upload attachments for a project."""
     auth_err = _require_buyer_auth(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     try:
         proj = Project.objects.get(id=str(project_id))
     except Project.DoesNotExist:
         return JsonResponse({'error': 'Project not found'}, status=404)
-
     if request.method == 'GET':
         atts = [a.as_dict() for a in Attachment.objects.filter(project=proj).order_by('-uploaded_at')]
         return JsonResponse({'attachments': atts})
-
     if request.method == 'POST':
         f = request.FILES.get('file')
         if not f:
@@ -197,26 +148,19 @@ def project_attachments(request, project_id: str):
         att = Attachment(id=uuid.uuid4().hex, project=proj, file=f, kind=kind)
         att.save()
         return JsonResponse({'attachment': att.as_dict()})
-
     return HttpResponseNotAllowed(['GET', 'POST'])
-
-
-@csrf_exempt
 def project_attachment_detail(request, project_id: str, attachment_id: str):
     """Delete a single attachment."""
     auth_err = _require_buyer_auth(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     try:
         att = Attachment.objects.get(id=str(attachment_id), project_id=str(project_id))
     except Attachment.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
-
     if request.method == 'DELETE':
         # delete file from storage as well
         try:
@@ -226,22 +170,15 @@ def project_attachment_detail(request, project_id: str, attachment_id: str):
             pass
         att.delete()
         return JsonResponse({'ok': True})
-
     return HttpResponseNotAllowed(['DELETE'])
-
-
-@csrf_exempt
 def export_data(request):
     auth_err = _require_buyer_auth(request)
     if auth_err:
         return auth_err
-
     csrf_err = _require_same_origin_for_unsafe(request)
     if csrf_err:
         return csrf_err
-
     """Generate XLSX/PDF/CSV export based on selected options.
-
     Body (JSON):
       - project_ids: [..]
       - format: xlsx|pdf|csv
@@ -250,19 +187,15 @@ def export_data(request):
     """
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
-
     payload = _json_body(request)
     if not isinstance(payload, dict):
         return JsonResponse({'error': 'Invalid JSON body'}, status=400)
-
     project_ids = payload.get('project_ids') or []
     if not isinstance(project_ids, list) or not project_ids:
         return JsonResponse({'error': 'project_ids is required'}, status=400)
-
     fmt = str(payload.get('format') or 'xlsx').strip().lower()
     if fmt not in ('xlsx', 'pdf', 'csv'):
         fmt = 'xlsx'
-
     include_items = bool(payload.get('include_items', True))
     include_item_suppliers = bool(payload.get('include_item_suppliers', True))
     include_price_breaks = bool(payload.get('include_price_breaks', True))
@@ -271,7 +204,6 @@ def export_data(request):
     suppliers_mode = str(payload.get('suppliers_mode') or 'all').strip().lower()
     if suppliers_mode not in ('all', 'main'):
         suppliers_mode = 'all'
-
     # Fetch projects
     projects = list(Project.objects.filter(id__in=[str(x) for x in project_ids]))
     # keep order of requested ids
@@ -279,7 +211,6 @@ def export_data(request):
     projects = [proj_by_id.get(str(pid)) for pid in project_ids if proj_by_id.get(str(pid))]
     if not projects:
         return JsonResponse({'error': 'No projects found for given IDs'}, status=404)
-
     def safe_num(v):
         try:
             s = str(v).replace(',', '.').strip()
@@ -288,13 +219,10 @@ def export_data(request):
             return float(s)
         except Exception:
             return 0.0
-
     def as_date(v):
         s = str(v or '').strip()
         return s.split('T')[0] if s else ''
-
     MAX_TIERS = 10  # standard export tiers (Qty/Price 1..10)
-
     def _qty_cols(it):
         cols = {}
         for i in range(1, MAX_TIERS + 1):
@@ -314,7 +242,6 @@ def export_data(request):
         extra.sort(key=lambda t: t[0])
         cols['qty_next'] = " | ".join([f"qty_{i}={v}" for i, v in extra])
         return cols
-
     def _pick_main_supplier(it, main_name):
         sups = it.get('suppliers') or []
         if not isinstance(sups, list):
@@ -334,7 +261,6 @@ def export_data(request):
             if isinstance(s, dict):
                 return s
         return None
-
     def _supplier_price_list(s):
         if not isinstance(s, dict):
             return []
@@ -356,7 +282,6 @@ def export_data(request):
         while out and str(out[-1]).strip() == '':
             out.pop()
         return out
-
     def _price_cols(it, s):
         cols = {}
         plist = _supplier_price_list(s)
@@ -374,7 +299,6 @@ def export_data(request):
                 extra.append((idx, str(v).strip()))
         cols['price_next'] = " | ".join([f"price_{i}={v}" for i, v in extra])
         return cols
-
     # Flatten data
     rows_projects = []
     rows_items = []
@@ -382,9 +306,7 @@ def export_data(request):
     rows_suppliers = []
     rows_rfqs = []
     rows_atts = []
-
     supplier_agg = {}  # (proj_id, sup_name) -> dict
-
     for p in projects:
         pdata = p.data or {}
         rows_projects.append({
@@ -399,10 +321,8 @@ def export_data(request):
             'items_count': len(pdata.get('items') or []),
             'rfq_bundles': len(pdata.get('rfqBatches') or pdata.get('rfq_batches') or []),
         })
-
         items = pdata.get('items') or []
         batches = pdata.get('rfqBatches') or pdata.get('rfq_batches') or []
-
         if include_rfqs:
             for b in batches:
                 if not isinstance(b, dict): 
@@ -419,7 +339,6 @@ def export_data(request):
                     'currency': b.get('currency') or '',
                     'note': b.get('note') or '',
                 })
-
         if include_items:
             for it in items:
                 if not isinstance(it, dict): 
@@ -448,7 +367,6 @@ def export_data(request):
                     rows_items[-1].update(_price_cols(it, _pick_main_supplier(it, main_sup)))
                 except Exception:
                     pass
-
                 if include_item_suppliers:
                     sups = it.get('suppliers') or []
                     if not isinstance(sups, list):
@@ -462,7 +380,6 @@ def export_data(request):
                         is_main = bool(s.get('isMain') or (main_sup and str(main_sup).strip().lower() == str(sname).strip().lower()))
                         if suppliers_mode == 'main' and not is_main:
                             continue
-
                         row = {
                             'project_id': p.id,
                             'project_name': p.name,
@@ -494,8 +411,6 @@ def export_data(request):
                         except Exception:
                             pass
                         rows_item_sups.append(row)
-
-
                         # aggregate per supplier
                         key = (str(p.id), str(sname).strip())
                         agg = supplier_agg.get(key)
@@ -519,7 +434,6 @@ def export_data(request):
                                 agg['quoted_items'].add(str(dn))
                                 agg['avg_price_eur_sum'] += price_val
                                 agg['avg_price_eur_cnt'] += 1
-
         if include_attachments:
             for a in Attachment.objects.filter(project=p).order_by('-uploaded_at'):
                 rows_atts.append({
@@ -530,7 +444,6 @@ def export_data(request):
                     'file': a.file.name if a.file else '',
                     'uploaded_at': as_date(a.uploaded_at),
                 })
-
     # finalize supplier agg
     for agg in supplier_agg.values():
         rows_suppliers.append({
@@ -542,8 +455,6 @@ def export_data(request):
             'quoted_items': len(agg['quoted_items']),
             'avg_price': (agg['avg_price_eur_sum'] / agg['avg_price_eur_cnt']) if agg['avg_price_eur_cnt'] else '',
         })
-
-
     # --- STANDARDIZE EXPORT HEADERS (ensure tier columns exist on every row) ---
     try:
         _tier_qty_keys = [f'qty_{i}' for i in range(1, MAX_TIERS + 1)] + ['qty_next']
@@ -556,7 +467,6 @@ def export_data(request):
                 _r.setdefault(_k, '')
     except Exception:
         pass
-
     # CSV: keep it simple (items only)
     if fmt == 'csv':
         import csv
@@ -579,7 +489,6 @@ def export_data(request):
         resp = HttpResponse(data, content_type='text/csv; charset=utf-8')
         resp['Content-Disposition'] = 'attachment; filename="rfq_export.csv"'
         return resp
-
     if fmt == 'pdf':
         # PDF summary (ReportLab)
         try:
@@ -588,17 +497,14 @@ def export_data(request):
             from reportlab.lib.units import mm
         except Exception as e:
             return JsonResponse({'error': f'ReportLab not available: {e}'}, status=500)
-
         import io
         buf = io.BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
         width, height = A4
         y = height - 18*mm
-
         c.setFont("Helvetica-Bold", 14)
         c.drawString(18*mm, y, "RFQ Export Summary")
         y -= 10*mm
-
         c.setFont("Helvetica", 10)
         for rp in rows_projects:
             line = f"{rp['project_name']} ({rp['project_id']}) — Status: {rp.get('project_status','')} — Items: {rp.get('items_count','')} — Bundles: {rp.get('rfq_bundles','')}"
@@ -608,7 +514,6 @@ def export_data(request):
                 c.showPage()
                 y = height - 18*mm
                 c.setFont("Helvetica", 10)
-
         y -= 4*mm
         c.setFont("Helvetica-Bold", 12)
         c.drawString(18*mm, y, "Top suppliers (by quoted items)")
@@ -623,23 +528,19 @@ def export_data(request):
                 c.showPage()
                 y = height - 18*mm
                 c.setFont("Helvetica", 10)
-
         c.save()
         buf.seek(0)
         resp = HttpResponse(buf.read(), content_type='application/pdf')
         resp['Content-Disposition'] = 'attachment; filename="rfq_export.pdf"'
         return resp
-
     # XLSX
     try:
         from openpyxl import Workbook
         from openpyxl.utils import get_column_letter
     except Exception as e:
         return JsonResponse({'error': f'openpyxl not available: {e}'}, status=500)
-
     wb = Workbook()
     wb.remove(wb.active)
-
     def add_sheet(title, rows, headers=None):
         ws = wb.create_sheet(title=title[:31])
         if not rows:
@@ -659,7 +560,6 @@ def export_data(request):
         # basic column widths
         for i, h in enumerate(headers, start=1):
             ws.column_dimensions[get_column_letter(i)].width = min(42, max(10, len(str(h)) + 2))
-
     # Header presets (keep tier columns always visible)
     ITEM_HEADERS_BASE = [
         'project_id','project_name','drawing_no','description','manufacturer','mpn','status',
@@ -673,7 +573,6 @@ def export_data(request):
     TIER_P_HEADERS = [f'price_{i}' for i in range(1, MAX_TIERS + 1)] + ['price_next']
     ITEM_HEADERS = ITEM_HEADERS_BASE + TIER_Q_HEADERS + TIER_P_HEADERS
     ITEM_SUP_HEADERS = ITEM_SUP_HEADERS_BASE + TIER_Q_HEADERS + TIER_P_HEADERS
-
     add_sheet("Projects", rows_projects)
     if include_items:
         add_sheet("Items", rows_items, headers=ITEM_HEADERS)
@@ -684,7 +583,6 @@ def export_data(request):
     add_sheet("Suppliers", rows_suppliers)
     if include_attachments:
         add_sheet("Attachments", rows_atts)
-
     import io
     buf = io.BytesIO()
     wb.save(buf)
@@ -692,7 +590,6 @@ def export_data(request):
     resp = HttpResponse(buf.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     resp['Content-Disposition'] = 'attachment; filename="rfq_export.xlsx"'
     return resp
-
 # ---------------------------------------------------------------------------
 # Legacy compatibility aliases
 # ---------------------------------------------------------------------------
@@ -701,7 +598,6 @@ def export_data(request):
 # rfq.views_api.* continue to work.
 from . import api_supplier as _api_supplier
 from . import api_quotes as _api_quotes
-
 supplier_access_generate = _api_supplier.supplier_access_generate
 supplier_access_viewed = _api_supplier.supplier_access_viewed
 supplier_portal_save_draft = _api_supplier.supplier_portal_save_draft
@@ -715,7 +611,6 @@ supplier_access_update_items = _api_supplier.supplier_access_update_items
 supplier_access_cancel = _api_supplier.supplier_access_cancel
 supplier_access_reopen_buyer = _api_supplier.supplier_access_reopen_buyer
 supplier_access_bulk_generate = _api_supplier.supplier_access_bulk_generate
-
 quotes_list = _api_quotes.quotes_list
 quotes_detail = _api_quotes.quotes_detail
 quotes_create = _api_quotes.quotes_create

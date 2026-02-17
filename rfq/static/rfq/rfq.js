@@ -10279,7 +10279,7 @@ window.SystemApps.rfq = {
 
             // also reset server storage (Django)
             try {
-                fetch('/api/projects/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }).catch(() => { });
+                fetch('/api/projects/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() }, credentials: 'same-origin' }).catch(() => { });
             } catch (e) { }
             if (window.showToast) window.showToast('RFQ data cleared. Reloading…', 'success');
             setTimeout(() => location.reload(), 500);
@@ -14200,7 +14200,10 @@ window.SystemApps.rfq = {
 
         async function projDetailFetchJson(url, opts) {
             const o = opts || {};
-            const res = await fetch(url, { method: o.method || 'GET', body: o.body, credentials: 'same-origin' });
+            const method = (o.method || 'GET').toUpperCase();
+            const headers = Object.assign({}, o.headers || {});
+            if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) headers['X-CSRFToken'] = getCSRFToken();
+            const res = await fetch(url, { method, body: o.body, credentials: 'same-origin', headers });
             if (!res.ok) {
                 const t = await res.text().catch(() => '');
                 throw new Error(t || ('HTTP ' + res.status));
@@ -19681,7 +19684,7 @@ Best regards`)}</textarea>
                     try {
                         const r = await fetch('/api/export', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                             body: JSON.stringify(opts),
                             credentials: 'same-origin',
                         });
@@ -29105,7 +29108,7 @@ Best regards`)}</textarea>
 
             fetch('/api/quotes/upsert_from_planner/', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                 body: JSON.stringify(payload),
             })
             .then(r => r.json())
@@ -41864,6 +41867,8 @@ const getCookie = (name) => {
     return cookieValue;
 };
 
+const getCSRFToken = () => getCookie('csrftoken') || '';
+
 if (typeof window.showToast !== 'function') {
     window.showToast = function (msg, type) {
         console.log(`[Toast ${type}]: ${msg}`);
@@ -42829,7 +42834,7 @@ window.rejectSupplierSubmission = function (tokenId) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCookie('csrftoken')
+                    'X-CSRFToken': getCSRFToken()
                 },
                 body: JSON.stringify({ action, reason })
             });
@@ -42876,7 +42881,7 @@ window.approveSupplierSubmission = async function (tokenId) {
         try {
             const res = await fetch(`/api/supplier_access/${tokenId}/approve`, {
                 method: 'POST',
-                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'X-CSRFToken': getCSRFToken() }
             });
 
             if (res.ok) {
@@ -43089,7 +43094,7 @@ window._showGenerateConfigModal = function(supplierNames, isBulk) {
             if (isBulk) {
                 const res = await fetch('/api/supplier_access/bulk_generate', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                     body: JSON.stringify({
                         project_id: project.id,
                         supplier_names: supplierNames,
@@ -43106,7 +43111,7 @@ window._showGenerateConfigModal = function(supplierNames, isBulk) {
                 const sName = supplierNames[0];
                 const res = await fetch('/api/supplier_access/generate', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
                     body: JSON.stringify({
                         project_id: project.id, supplier_name: sName,
                         contact_name: contactName, contact_email: contactEmail, contact_phone: contactPhone,
@@ -43148,7 +43153,7 @@ window.updateSupplierItems = async function(tokenId) {
         try {
             const res = await fetch(`/api/supplier_access/${tokenId}/update_items`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() }
             });
             if (!res.ok) throw new Error('API Error');
             const json = await res.json();
@@ -43166,7 +43171,7 @@ window.cancelSupplierAccess = async function(tokenId) {
         try {
             const res = await fetch(`/api/supplier_access/${tokenId}/cancel`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() }
             });
             if (!res.ok) throw new Error('API Error');
             window.showAlert('Portal cancelled.');
@@ -43183,7 +43188,7 @@ window.reopenSupplierAccess = async function(tokenId) {
         try {
             const res = await fetch(`/api/supplier_access/${tokenId}/reopen`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() }
             });
             if (!res.ok) throw new Error('API Error');
             window.showAlert('Portal reopened.');
@@ -43242,7 +43247,7 @@ document.addEventListener('click', function (e) {
 const _qEsc = (text) => text ? String(text).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[m]) : '';
 
 function _qFetchJson(url, opts = {}) {
-    const headers = Object.assign({ 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, opts.headers || {});
+    const headers = Object.assign({ 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() }, opts.headers || {});
     return fetch(url, Object.assign({}, opts, { headers })).then(r => r.json());
 }
 
